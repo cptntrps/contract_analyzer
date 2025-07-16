@@ -156,21 +156,26 @@ class EnhancedReportGenerator:
             view.RevisionsView = 0  # wdRevisionsViewFinal - show final with markup
             view.ShowRevisionsAndComments = True
             
-            # Configure revision display options to use Word's default colors
+            # Configure revision display options using Word's comparison colors
             try:
                 view.ShowInsertionsAndDeletions = True
                 view.ShowFormatChanges = True
                 view.ShowComments = True
                 
-                # Try to set proper revision colors using Word's default scheme
+                # Set Word's comparison colors using different approach
                 revision_options = compared_doc.Application.Options
-                revision_options.InsertedTextColor = 7  # wdColorAutomatic - Word's default blue
-                revision_options.DeletedTextColor = 6   # wdColorRed - Word's default red
-                revision_options.RevisedLinesColor = 7  # wdColorAutomatic
-                revision_options.InsertedTextMark = 2   # wdInsertedTextMarkUnderline
-                revision_options.DeletedTextMark = 1    # wdDeletedTextMarkStrikeThrough
                 
-                logger.debug("Applied Word's default revision color scheme")
+                # Use Word color constants (different from previous approach)
+                # wdColorRed = 6, wdColorBlue = 5, wdColorGreen = 4, wdColorAutomatic = 0
+                revision_options.InsertedTextColor = 6    # wdColorRed for insertions
+                revision_options.DeletedTextColor = 5     # wdColorBlue for deletions  
+                revision_options.RevisedLinesColor = 6    # wdColorRed for revised lines
+                
+                # Set proper marking styles
+                revision_options.InsertedTextMark = 2     # wdInsertedTextMarkUnderline
+                revision_options.DeletedTextMark = 1      # wdDeletedTextMarkStrikeThrough
+                
+                logger.debug("Applied Word comparison colors: Red insertions, Blue deletions")
             except Exception as color_error:
                 logger.debug(f"Could not set revision colors (will use Word defaults): {color_error}")
                 # Continue without custom colors - Word will use its defaults

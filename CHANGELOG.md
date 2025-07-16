@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.0.6] - 2025-07-16
+
+### Enhancements
+- ✅ **Word COM color scheme improvement**: Enhanced Word COM redlined documents to use Word's default revision colors
+- ✅ **Proper revision display**: Added InsertedTextColor (blue) and DeletedTextColor (red) configuration
+- ✅ **Standard revision marks**: Added underline for insertions and strikethrough for deletions
+- ✅ **Graceful error handling**: Added fallback to Word's default colors if configuration fails
+
+### Technical Improvements
+- **Word revision options**: Added proper configuration of Word's revision display options
+- **Color scheme compatibility**: Uses Word's standard color constants for better compatibility
+- **Error resilience**: Continues operation even if color configuration fails
+
 ## [1.0.5] - 2025-07-16
 
 ### Bug Fixes
@@ -11,8 +24,7 @@
 ### Technical Improvements
 - **Enhanced Word COM method**: `generate_word_com_redlined_document()` now uses original contract file path
 - **Better error handling**: Added validation for contract path existence in analysis data
-- **Cleaner code**: Removed unused `_create_contract_document()` method call and temporary file cleanup
-- **Accurate track changes**: Users now see true differences between template and contract
+- **Cleaner code**: Removed unnecessary temporary file creation and cleanup
 
 ## [1.0.4] - 2025-07-16
 

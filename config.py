@@ -35,7 +35,7 @@ class Config:
     
     # === OLLAMA CONFIGURATION ===
     OLLAMA_HOST = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
-    OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'llama3:latest')
+    OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'llama3:8b')
     OLLAMA_TIMEOUT = int(os.getenv('OLLAMA_TIMEOUT', '30'))
     OLLAMA_MAX_RETRIES = int(os.getenv('OLLAMA_MAX_RETRIES', '3'))
     OLLAMA_RETRY_DELAY = int(os.getenv('OLLAMA_RETRY_DELAY', '2'))
