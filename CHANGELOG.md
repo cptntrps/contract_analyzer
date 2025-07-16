@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.0.1] - 2025-07-16
+
+### Bug Fixes
+- ✅ **Settings page model loading**: Fixed infinite "Loading models..." state
+- ✅ **Model switching functionality**: Corrected endpoint URL and request parameters
+- ✅ **File upload validation**: Removed invalid max_size parameter causing errors
+- ✅ **Drag and drop enhancements**: Better event handling and visual feedback
+- ✅ **Code cleanup**: Removed duplicate functions and improved error handling
+
+### Enhanced Features
+- **Model dropdown**: Now loads available models automatically with sizes
+- **Model switching**: Proper user feedback and error handling
+- **Client-side validation**: DOCX file type and 16MB size limit checks
+- **Drag/drop improvements**: Added handleDragLeave and stopPropagation
+- **Better notifications**: Type-specific messages for contracts vs templates
+- **Element validation**: Proper null checks with console logging
+
+### Technical Improvements
+- Fixed `/api/change-model` endpoint integration
+- Enhanced drag event handling with proper cleanup
+- Improved error messages and user feedback
+- Consistent validation patterns across upload functions
+- Clean code structure with no duplicate implementations
+
 ## [1.0.0] - 2025-07-16
 
 ### Major Features
