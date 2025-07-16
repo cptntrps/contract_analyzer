@@ -147,14 +147,33 @@ class EnhancedReportGenerator:
                 raise Exception("Document comparison failed - returned None")
             
             logger.debug("Configuring track changes display...")
-            # Configure track changes display
+            # Configure track changes display for proper color scheme
             compared_doc.TrackRevisions = True
             compared_doc.ShowRevisions = True
             
-            # Set review pane display options
+            # Set review pane display options for proper Word color scheme
             view = compared_doc.ActiveWindow.View
-            view.RevisionsView = 0  # wdRevisionsViewFinal
+            view.RevisionsView = 0  # wdRevisionsViewFinal - show final with markup
             view.ShowRevisionsAndComments = True
+            
+            # Configure revision display options to use Word's default colors
+            try:
+                view.ShowInsertionsAndDeletions = True
+                view.ShowFormatChanges = True
+                view.ShowComments = True
+                
+                # Try to set proper revision colors using Word's default scheme
+                revision_options = compared_doc.Application.Options
+                revision_options.InsertedTextColor = 7  # wdColorAutomatic - Word's default blue
+                revision_options.DeletedTextColor = 6   # wdColorRed - Word's default red
+                revision_options.RevisedLinesColor = 7  # wdColorAutomatic
+                revision_options.InsertedTextMark = 2   # wdInsertedTextMarkUnderline
+                revision_options.DeletedTextMark = 1    # wdDeletedTextMarkStrikeThrough
+                
+                logger.debug("Applied Word's default revision color scheme")
+            except Exception as color_error:
+                logger.debug(f"Could not set revision colors (will use Word defaults): {color_error}")
+                # Continue without custom colors - Word will use its defaults
             
             # Save the redlined version
             logger.debug(f"Saving redlined document to: {output_path}")
