@@ -1263,8 +1263,100 @@ function loadSettings() {
     // Load current settings
     console.log('Loading settings...');
     
+    // Load available models for the dropdown
+    loadAvailableModels();
+    
+    // Load current model info
+    loadModelInfo();
+    
     // Load cache statistics
     loadCacheStats();
+}
+
+function loadAvailableModels() {
+    console.log('Loading available models...');
+    
+    fetch('/api/available-models')
+        .then(response => response.json())
+        .then(data => {
+            const modelSelect = document.getElementById('llmModel');
+            if (!modelSelect) {
+                console.error('Model select element not found');
+                return;
+            }
+            
+            if (data.success && data.models) {
+                // Clear loading option
+                modelSelect.innerHTML = '';
+                
+                // Add models to dropdown
+                data.models.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.name;
+                    option.textContent = `${model.name} (${(model.size / (1024 * 1024 * 1024)).toFixed(1)} GB)`;
+                    
+                    // Mark current model as selected
+                    if (model.current) {
+                        option.selected = true;
+                    }
+                    
+                    modelSelect.appendChild(option);
+                });
+                
+                console.log(`Loaded ${data.models.length} available models`);
+                
+                // Add change event listener for model switching
+                modelSelect.addEventListener('change', function() {
+                    if (this.value) {
+                        switchModel(this.value);
+                    }
+                });
+                
+            } else {
+                modelSelect.innerHTML = '<option value="">Error loading models</option>';
+                console.error('Failed to load models:', data);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading available models:', error);
+            const modelSelect = document.getElementById('llmModel');
+            if (modelSelect) {
+                modelSelect.innerHTML = '<option value="">Error loading models</option>';
+            }
+        });
+}
+
+function switchModel(modelName) {
+    console.log('Switching to model:', modelName);
+    showNotification(`Switching to model: ${modelName}...`, 'info');
+    
+    fetch('/api/switch-model', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            model_name: modelName
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification(`Successfully switched to ${modelName}`, 'success');
+            // Reload model info to reflect the change
+            loadModelInfo();
+        } else {
+            showNotification(`Failed to switch model: ${data.error}`, 'error');
+            // Reload available models to reset the dropdown
+            loadAvailableModels();
+        }
+    })
+    .catch(error => {
+        console.error('Error switching model:', error);
+        showNotification('Error switching model', 'error');
+        // Reload available models to reset the dropdown
+        loadAvailableModels();
+    });
 }
 
 function loadCacheStats() {
