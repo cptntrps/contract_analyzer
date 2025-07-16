@@ -1330,13 +1330,13 @@ function switchModel(modelName) {
     console.log('Switching to model:', modelName);
     showNotification(`Switching to model: ${modelName}...`, 'info');
     
-    fetch('/api/switch-model', {
+    fetch('/api/change-model', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-            model_name: modelName
+            model: modelName
         })
     })
     .then(response => response.json())
