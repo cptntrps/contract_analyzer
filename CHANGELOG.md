@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.0.5] - 2025-07-16
+
+### Bug Fixes
+- ✅ **Word COM comparison fix**: Fixed critical issue where Word COM redlined documents were comparing template against analysis summary instead of original contract
+- ✅ **Contract path preservation**: Added `contract_path` to analysis results to maintain reference to original contract file
+- ✅ **Removed temporary document generation**: Eliminated unnecessary temporary document creation from analysis data
+- ✅ **Improved comparison accuracy**: Word COM now correctly compares template vs original contract content
+
+### Technical Improvements
+- **Enhanced Word COM method**: `generate_word_com_redlined_document()` now uses original contract file path
+- **Better error handling**: Added validation for contract path existence in analysis data
+- **Cleaner code**: Removed unused `_create_contract_document()` method call and temporary file cleanup
+- **Accurate track changes**: Users now see true differences between template and contract
+
 ## [1.0.4] - 2025-07-16
 
 ### Structure Optimization (Phase 3)
