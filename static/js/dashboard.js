@@ -859,19 +859,31 @@ function setupFileUploads() {
     const contractUpload = document.getElementById('contractUpload');
     const contractInput = document.getElementById('contractFileInput');
     
-    contractUpload.addEventListener('click', () => contractInput.click());
-    contractUpload.addEventListener('dragover', handleDragOver);
-    contractUpload.addEventListener('drop', (e) => handleDrop(e, 'contract'));
-    contractInput.addEventListener('change', (e) => uploadFiles(e.target.files, 'contract'));
+    if (contractUpload && contractInput) {
+        contractUpload.addEventListener('click', () => contractInput.click());
+        contractUpload.addEventListener('dragover', handleDragOver);
+        contractUpload.addEventListener('dragleave', handleDragLeave);
+        contractUpload.addEventListener('drop', (e) => handleDrop(e, 'contract'));
+        contractInput.addEventListener('change', (e) => uploadFiles(e.target.files, 'contract'));
+        console.log('Contract upload area setup complete');
+    } else {
+        console.error('Contract upload elements not found');
+    }
     
     // Template upload
     const templateUpload = document.getElementById('templateUpload');
     const templateInput = document.getElementById('templateFileInput');
     
-    templateUpload.addEventListener('click', () => templateInput.click());
-    templateUpload.addEventListener('dragover', handleDragOver);
-    templateUpload.addEventListener('drop', (e) => handleDrop(e, 'template'));
-    templateInput.addEventListener('change', (e) => uploadFiles(e.target.files, 'template'));
+    if (templateUpload && templateInput) {
+        templateUpload.addEventListener('click', () => templateInput.click());
+        templateUpload.addEventListener('dragover', handleDragOver);
+        templateUpload.addEventListener('dragleave', handleDragLeave);
+        templateUpload.addEventListener('drop', (e) => handleDrop(e, 'template'));
+        templateInput.addEventListener('change', (e) => uploadFiles(e.target.files, 'template'));
+        console.log('Template upload area setup complete');
+    } else {
+        console.error('Template upload elements not found');
+    }
     
     // Modal upload
     const modalUpload = document.getElementById('modalFileInput');
@@ -880,21 +892,53 @@ function setupFileUploads() {
 
 function handleDragOver(e) {
     e.preventDefault();
+    e.stopPropagation();
     e.currentTarget.classList.add('drag-over');
+}
+
+function handleDragLeave(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only remove the class if we're actually leaving the element (not just moving to a child)
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+        e.currentTarget.classList.remove('drag-over');
+    }
 }
 
 function handleDrop(e, type) {
     e.preventDefault();
+    e.stopPropagation();
     e.currentTarget.classList.remove('drag-over');
-    uploadFiles(e.dataTransfer.files, type);
+    
+    // Check if files were dropped
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+        uploadFiles(files, type);
+    } else {
+        showNotification('No files were dropped', 'warning');
+    }
 }
 
 function uploadFiles(files, type) {
     Array.from(files).forEach(file => {
+        // Validate file type
+        if (!file.name.toLowerCase().endsWith('.docx')) {
+            showNotification(`${file.name} is not a DOCX file. Only DOCX files are supported.`, 'error');
+            return;
+        }
+        
+        // Validate file size (16MB limit)
+        const maxSize = 16 * 1024 * 1024; // 16MB
+        if (file.size > maxSize) {
+            showNotification(`${file.name} is too large. Maximum file size is 16MB.`, 'error');
+            return;
+        }
+        
         const formData = new FormData();
         formData.append('file', file);
         
         const endpoint = type === 'contract' ? '/api/upload-contract' : '/api/upload-template';
+        const typeLabel = type === 'contract' ? 'contract' : 'template';
         
         // Show upload progress
         showUploadProgress(file.name);
@@ -908,16 +952,16 @@ function uploadFiles(files, type) {
             hideUploadProgress();
             
             if (data.error) {
-                showNotification(`Error uploading ${file.name}: ${data.error}`, 'error');
+                showNotification(`Error uploading ${typeLabel} ${file.name}: ${data.error}`, 'error');
             } else {
-                showNotification(`${file.name} uploaded successfully`, 'success');
+                showNotification(`${typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1)} ${file.name} uploaded successfully`, 'success');
                 loadDashboardData();
             }
         })
         .catch(error => {
             hideUploadProgress();
             console.error('Upload error:', error);
-            showNotification(`Error uploading ${file.name}`, 'error');
+            showNotification(`Error uploading ${typeLabel} ${file.name}`, 'error');
         });
     });
 }
