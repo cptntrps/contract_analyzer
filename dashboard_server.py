@@ -276,7 +276,7 @@ class DashboardServer:
                 
                 # Security validation
                 try:
-                    validate_file_upload(file, max_size=config.MAX_CONTENT_LENGTH)
+                    validate_file_upload(file)
                 except (FileValidationError, ContentValidationError) as e:
                     return jsonify({'error': str(e)}), 400
                 
@@ -326,7 +326,7 @@ class DashboardServer:
                 
                 # Security validation
                 try:
-                    validate_file_upload(file, max_size=config.MAX_CONTENT_LENGTH)
+                    validate_file_upload(file)
                 except (FileValidationError, ContentValidationError) as e:
                     return jsonify({'error': str(e)}), 400
                 

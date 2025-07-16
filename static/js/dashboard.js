@@ -465,47 +465,6 @@ function refreshDashboard() {
     loadDashboardData();
 }
 
-function setupFileUploads() {
-    console.log('Setting up file uploads...');
-    
-    // Setup contract file upload
-    const contractFileInput = document.getElementById('contractFileInput');
-    const contractUploadArea = document.getElementById('contractUpload');
-    
-    if (contractFileInput && contractUploadArea) {
-        contractUploadArea.addEventListener('click', () => {
-            contractFileInput.click();
-        });
-        
-        contractFileInput.addEventListener('change', (e) => {
-            const files = e.target.files;
-            if (files.length > 0) {
-                console.log('Files selected:', files.length);
-                showNotification(`${files.length} file(s) selected for upload`, 'info');
-                // TODO: Implement file upload logic
-            }
-        });
-    }
-    
-    // Setup template file upload
-    const templateFileInput = document.getElementById('templateFileInput');
-    const templateUploadArea = document.getElementById('templateUpload');
-    
-    if (templateFileInput && templateUploadArea) {
-        templateUploadArea.addEventListener('click', () => {
-            templateFileInput.click();
-        });
-        
-        templateFileInput.addEventListener('change', (e) => {
-            const files = e.target.files;
-            if (files.length > 0) {
-                console.log('Template files selected:', files.length);
-                showNotification(`${files.length} template file(s) selected for upload`, 'info');
-                // TODO: Implement template upload logic
-            }
-        });
-    }
-}
 
 function setupModalEvents() {
     console.log('Setting up modal events...');
