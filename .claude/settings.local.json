@@ -4,7 +4,8 @@
       "Bash(source:*)",
       "Bash(python:*)",
       "Bash(ls:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(curl:*)"
     ],
     "deny": []
   }

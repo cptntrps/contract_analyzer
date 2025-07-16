@@ -20,8 +20,8 @@ from security import (
     audit_security_event, get_security_headers,
     FileValidationError, PathTraversalError, ContentValidationError
 )
-from app.analyzer import ContractAnalyzer
-from app.llm_handler import LLMHandler
+from analyzer import ContractAnalyzer
+from llm_handler import LLMHandler
 from enhanced_report_generator import EnhancedReportGenerator
 
 # Configure logging
