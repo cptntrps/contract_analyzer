@@ -6,10 +6,12 @@ Enhanced with configuration management and security features
 import os
 import json
 import datetime
-from werkzeug.utils import secure_filename
-from werkzeug.exceptions import RequestEntityTooLarge
 import logging
 from pathlib import Path
+from typing import Dict, List, Optional, Any
+
+from werkzeug.utils import secure_filename
+from werkzeug.exceptions import RequestEntityTooLarge
 
 from flask import Flask, request, jsonify, send_file, render_template
 
@@ -36,7 +38,16 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class DashboardServer:
+    """
+    Main dashboard server for Contract Analyzer application.
+    
+    Provides a Flask-based web interface for contract analysis,
+    template management, and report generation with enhanced
+    security features and configuration management.
+    """
+    
     def __init__(self):
+        """Initialize the Dashboard Server with Flask app and components."""
         self.app = Flask(__name__, 
                         template_folder=config.TEMPLATE_FOLDER, 
                         static_folder=config.STATIC_FOLDER)
@@ -103,6 +114,26 @@ class DashboardServer:
             response.headers[header] = value
         return response
     
+    def create_error_response(self, message: str, status_code: int = 500, additional_data: Optional[Dict] = None):
+        """Create standardized error response"""
+        error_data = {
+            'success': False,
+            'error': message,
+            'status_code': status_code
+        }
+        if additional_data:
+            error_data.update(additional_data)
+        return jsonify(error_data), status_code
+    
+    def create_success_response(self, data: Optional[Dict] = None, message: Optional[str] = None):
+        """Create standardized success response"""
+        response_data = {'success': True}
+        if data:
+            response_data.update(data)
+        if message:
+            response_data['message'] = message
+        return jsonify(response_data), 200
+    
     def load_existing_data(self):
         """Load existing contracts and templates from filesystem"""
         try:
@@ -167,10 +198,7 @@ class DashboardServer:
                 return jsonify(health_status), 200
             except Exception as e:
                 logger.error(f"Health check failed: {e}")
-                return jsonify({
-                    'status': 'error',
-                    'message': str(e)
-                }), 500
+                return self.create_error_response(str(e), 500, {'status': 'error'})
         
         @self.app.route('/api/available-models')
         def get_available_models():
@@ -184,11 +212,7 @@ class DashboardServer:
                 }), 200
             except Exception as e:
                 logger.error(f"Failed to get available models: {e}")
-                return jsonify({
-                    'success': False,
-                    'message': str(e),
-                    'models': []
-                }), 500
+                return self.create_error_response(str(e), 500, {'models': []})
         
         @self.app.route('/api/change-model', methods=['POST'])
         def change_model():
