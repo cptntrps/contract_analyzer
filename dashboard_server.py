@@ -552,7 +552,29 @@ class DashboardServer:
                     return jsonify({'error': 'Analysis result not found'}), 404
                 
                 # Generate document
-                file_path = self.report_generator.generate_word_com_redlined_document(result)
+                template_path = result.get('template_path')
+                if not template_path:
+                    return jsonify({'error': 'Template path not found in analysis result. Please re-run the analysis.'}), 400
+                
+                file_path = self.report_generator.generate_word_com_redlined_document(result, template_path, result['id'])
+                
+                # Check if file was actually generated (might be None due to COM cleanup issues)
+                expected_file_path = os.path.join(config.REPORTS_FOLDER, f"{result['id']}_word_com_redlined.docx")
+                
+                if file_path is None:
+                    # Check if file exists despite method returning None (COM cleanup error)
+                    if os.path.exists(expected_file_path):
+                        logger.info(f"Word COM document generated successfully despite cleanup warning: {expected_file_path}")
+                        return jsonify({
+                            'success': True,
+                            'message': 'Word COM redlined document generated successfully',
+                            'file_path': expected_file_path
+                        }), 200
+                    else:
+                        return jsonify({
+                            'success': False,
+                            'error': 'Failed to generate Word COM redlined document. Check logs for details.'
+                        }), 500
                 
                 return jsonify({
                     'success': True,
@@ -740,7 +762,9 @@ class DashboardServer:
             result = {
                 'id': f"{contract['id']}_{int(datetime.datetime.now().timestamp())}",
                 'contract': contract['name'],
+                'contract_path': contract['path'],  # Add original contract path
                 'template': template['name'],
+                'template_path': template['path'],
                 'status': status,
                 'changes': len(changes),
                 'similarity': round(similarity * 100, 1),

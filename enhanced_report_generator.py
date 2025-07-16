@@ -38,6 +38,7 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT, TA_JUSTIFY
 # Windows-only COM interface for Word
 try:
     import win32com.client as win32
+    import pythoncom
     COM_AVAILABLE = True
 except ImportError:
     COM_AVAILABLE = False
@@ -64,67 +65,149 @@ class EnhancedReportGenerator:
             logger.warning("Windows COM interface not available. Cannot generate Word track changes document.")
             return None
             
+        # COM objects to clean up
+        word = None
+        original = None
+        revised = None
+        compared_doc = None
+        
         try:
-            # Create temporary contract document
-            temp_contract_path = self.reports_dir / f"{base_name}_temp_contract.docx"
+            # Initialize COM
+            pythoncom.CoInitialize()
             
-            # Create contract document from analysis data
-            self._create_contract_document(analysis_data, temp_contract_path)
+            # Get original contract path from analysis data
+            contract_path = analysis_data.get('contract_path')
+            if not contract_path:
+                raise ValueError("Contract path not found in analysis data. Please re-run the analysis.")
             
             # Output path for redlined document
-            output_path = self.reports_dir / f"{base_name}_word_redlined.docx"
+            output_path = self.reports_dir / f"{base_name}_word_com_redlined.docx"
+            
+            # Verify files exist before proceeding
+            if not Path(template_path).exists():
+                raise FileNotFoundError(f"Template file not found: {template_path}")
+            if not Path(contract_path).exists():
+                raise FileNotFoundError(f"Contract file not found: {contract_path}")
+            
+            logger.info(f"Starting Word COM comparison: {Path(template_path).name} vs {Path(contract_path).name}")
             
             # Use Word COM to compare documents
             word = win32.Dispatch('Word.Application')
-            word.Visible = False  # Set to True for debugging
+            word.Visible = False
             
+            # Open both documents
+            logger.debug("Opening original document...")
+            original = word.Documents.Open(str(Path(template_path).absolute()))
+            logger.debug("Opening revised document...")
+            revised = word.Documents.Open(str(Path(contract_path).absolute()))
+            
+            # Perform the comparison with track changes
+            logger.debug("Performing document comparison...")
+            
+            # Try different parameter combinations for better compatibility
             try:
-                # Open both documents
-                original = word.Documents.Open(str(Path(template_path).absolute()))
-                revised = word.Documents.Open(str(temp_contract_path.absolute()))
-                
-                # Perform the comparison with track changes
+                # First, try the full parameter set
                 compared_doc = word.CompareDocuments(
                     OriginalDocument=original,
                     RevisedDocument=revised,
-                    CompareTarget=1,  # wdCompareTargetNew
-                    DetectFormatChanges=True,
-                    IgnoreAllComparisonWarnings=True,
-                    AddToRecentFiles=False
+                    Destination=1,  # wdCompareDestinationNew
+                    Granularity=1,  # wdGranularityWordLevel
+                    CompareFormatting=True,
+                    CompareCaseChanges=True,
+                    CompareWhitespace=True,
+                    CompareTables=True,
+                    CompareHeaders=True,
+                    CompareFootnotes=True,
+                    CompareTextboxes=True,
+                    CompareFields=True,
+                    CompareComments=True
                 )
-                
-                # Configure track changes display
-                compared_doc.TrackRevisions = True
-                compared_doc.ShowRevisions = True
-                
-                # Set review pane display options
-                view = compared_doc.ActiveWindow.View
-                view.RevisionsView = 0  # wdRevisionsViewFinal
-                view.ShowRevisionsAndComments = True
-                
-                # Save the redlined version
-                compared_doc.SaveAs2(str(output_path.absolute()))
-                
-                # Close all documents
-                compared_doc.Close(False)
-                revised.Close(False)
-                original.Close(False)
-                
-                logger.info(f"Word COM redlined document generated: {output_path}")
-                
-            finally:
-                # Always quit Word
-                word.Quit()
-                
-            # Clean up temporary file
-            if temp_contract_path.exists():
-                temp_contract_path.unlink()
+            except Exception as e:
+                logger.debug(f"Full parameter set failed: {e}. Trying simplified version...")
+                # If that fails, try with only essential parameters
+                try:
+                    compared_doc = word.CompareDocuments(
+                        OriginalDocument=original,
+                        RevisedDocument=revised,
+                        Destination=1,
+                        Granularity=1,
+                        CompareFormatting=True
+                    )
+                except Exception as e2:
+                    logger.debug(f"Simplified version failed: {e2}. Trying minimal parameters...")
+                    # If that fails, try minimal parameters
+                    compared_doc = word.CompareDocuments(
+                        OriginalDocument=original,
+                        RevisedDocument=revised,
+                        Destination=1
+                    )
+            
+            # Verify the comparison succeeded
+            if compared_doc is None:
+                raise Exception("Document comparison failed - returned None")
+            
+            logger.debug("Configuring track changes display...")
+            # Configure track changes display
+            compared_doc.TrackRevisions = True
+            compared_doc.ShowRevisions = True
+            
+            # Set review pane display options
+            view = compared_doc.ActiveWindow.View
+            view.RevisionsView = 0  # wdRevisionsViewFinal
+            view.ShowRevisionsAndComments = True
+            
+            # Save the redlined version
+            logger.debug(f"Saving redlined document to: {output_path}")
+            compared_doc.SaveAs2(str(output_path.absolute()))
+            
+            logger.info(f"Word COM redlined document generated: {output_path}")
             
             return str(output_path)
             
         except Exception as e:
             logger.error(f"Error generating Word COM redlined document: {e}")
             return None
+            
+        finally:
+            # Safe COM cleanup - don't propagate cleanup errors
+            self._safe_com_cleanup(word, original, revised, compared_doc)
+            
+            # Always cleanup COM
+            try:
+                pythoncom.CoUninitialize()
+            except:
+                pass
+    
+    def _safe_com_cleanup(self, word=None, original=None, revised=None, compared_doc=None):
+        """Safely clean up COM objects without propagating errors"""
+        
+        # Close documents in reverse order (newest first)
+        documents_to_close = [
+            ("compared_doc", compared_doc),
+            ("revised", revised), 
+            ("original", original)
+        ]
+        
+        for doc_name, doc in documents_to_close:
+            if doc is not None:
+                try:
+                    logger.debug(f"Closing {doc_name}...")
+                    doc.Close(False)  # Don't save changes
+                except Exception as e:
+                    logger.debug(f"Warning: Could not close {doc_name}: {e}")
+                    # Continue cleanup even if individual document close fails
+        
+        # Quit Word application
+        if word is not None:
+            try:
+                logger.debug("Quitting Word application...")
+                word.Quit()
+            except Exception as e:
+                logger.debug(f"Warning: Could not quit Word cleanly: {e}")
+                # This is expected for COM disconnection errors
+                # Don't treat as a failure since documents were already saved
+        
+        logger.debug("COM cleanup completed")
     
     def _create_contract_document(self, analysis_data: Dict[str, Any], output_path: Path):
         """Create a contract document from analysis data for comparison"""
