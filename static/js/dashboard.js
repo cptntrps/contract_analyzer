@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Global variables
 let currentTab = 'dashboard';
+let fileUploadsSetup = false; // Flag to prevent duplicate setup
 let dashboardData = {
     contracts: [],
     templates: [],
@@ -248,7 +249,7 @@ function loadTabData(tabName) {
     switch(tabName) {
         case 'upload':
             updateFileListings();
-            setupFileUploads();
+            // setupFileUploads() is called once during initialization, not needed here
             break;
         case 'settings':
             loadSettings();
@@ -896,6 +897,14 @@ function updateTemplatesList() {
 }
 
 function setupFileUploads() {
+    // Prevent duplicate setup
+    if (fileUploadsSetup) {
+        console.log('File uploads already setup, skipping...');
+        return;
+    }
+    
+    console.log('Setting up file uploads...');
+    
     // Contract upload
     const contractUpload = document.getElementById('contractUpload');
     const contractInput = document.getElementById('contractFileInput');
@@ -929,6 +938,10 @@ function setupFileUploads() {
     // Modal upload
     const modalUpload = document.getElementById('modalFileInput');
     modalUpload.addEventListener('change', (e) => uploadFiles(e.target.files, 'contract'));
+    
+    // Mark as setup complete
+    fileUploadsSetup = true;
+    console.log('File uploads setup completed successfully');
 }
 
 function handleDragOver(e) {
