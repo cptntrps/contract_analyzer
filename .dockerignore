@@ -1,0 +1,72 @@
+# Development files
+.git/
+.gitignore
+*.md
+README.md
+CHANGELOG.md
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+.coverage
+htmlcov/
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+.~lock.*
+output/logs/*
+server.log
+dashboard.log
+security_audit.log
+
+# Data directories (will be mounted as volumes)
+data/uploads/*
+data/reports/*
+data/templates/*
+!data/uploads/.gitkeep
+!data/reports/.gitkeep
+!data/templates/.gitkeep
+
+# Test files
+tests/
+docs/
+output/test-results/*
+output/coverage/*
+
+# Configuration with secrets
+config/.env
+user_config.json
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Deployment files (since they're not needed in container)
+deployment/railway.json
+deployment/render.yaml
+deployment/Procfile
+
+# Benchmarks and analysis artifacts
+.benchmarks/
+analysis_results.json 

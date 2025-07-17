@@ -166,7 +166,7 @@ class ProductionConfig(Config):
     ENV = 'production'
     LOG_LEVEL = 'WARNING'
     SECRET_KEY = os.getenv('FLASK_SECRET_KEY')  # Must be set in production
-    HOST = '127.0.0.1'  # More secure default for production
+    HOST = os.getenv('FLASK_HOST', '127.0.0.1')  # Respect environment variable
     
     @classmethod
     def validate_config(cls):

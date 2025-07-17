@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  contract-analyzer:
+    build:
+      context: .
+      dockerfile: deployment/Dockerfile
+    container_name: contract-analyzer
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env.docker
+    environment:
+      # Flask Configuration - Override to ensure container accessibility
+      - FLASK_HOST=0.0.0.0
+      - FLASK_PORT=8080
+      - FLASK_ENV=production
+      - DEBUG=false
+      - LOG_LEVEL=INFO
+      
+      # Security
+      - SECRET_KEY=${SECRET_KEY:-change-this-in-production}
+      
+      # File Limits
+      - MAX_CONTENT_LENGTH=52428800  # 50MB
+      
+    volumes:
+      # Persistent data storage
+      - ./data/uploads:/app/data/uploads
+      - ./data/templates:/app/data/templates
+      - ./data/reports:/app/data/reports
+      
+      # Logs
+      - ./output/logs:/app/output/logs
+      
+      # Configuration (optional - for live config updates)
+      - ./config/.env:/app/config/.env:ro
+      
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+      
+    # Security
+    user: "1000:1000"  # Adjust to your user ID
+    read_only: false  # Needs write access to data directories
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+
+networks:
+  default:
+    name: contract-analyzer-network 
