@@ -5,7 +5,11 @@
       "Bash(python:*)",
       "Bash(ls:*)",
       "Bash(grep:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(find:*)",
+      "Bash(mkdir:*)",
+      "Bash(cp:*)",
+      "Bash(timeout:*)"
     ],
     "deny": []
   }

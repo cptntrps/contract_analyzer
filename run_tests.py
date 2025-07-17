@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Startup script wrapper - launches the dashboard from the scripts directory
+Test runner wrapper - launches tests from the scripts directory
 """
 
 import sys
@@ -11,8 +11,8 @@ from pathlib import Path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-# Import and run the main startup script
-from scripts.start_dashboard import main
+# Import and run the main test runner
+from scripts.run_tests import main
 
 if __name__ == "__main__":
     main()

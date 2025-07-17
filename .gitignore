@@ -37,17 +37,28 @@ ENV/
 Thumbs.db
 
 # Application specific
-uploads/*
-!uploads/.gitkeep
-reports/*
-!reports/.gitkeep
-templates/*
-!templates/.gitkeep
+data/uploads/*
+!data/uploads/.gitkeep
+data/reports/*
+!data/reports/.gitkeep
+data/templates/*
+!data/templates/.gitkeep
+
+# Output directories
+output/logs/*
+!output/logs/.gitkeep
+output/test-results/*
+!output/test-results/.gitkeep
+output/coverage/*
+!output/coverage/.gitkeep
+output/artifacts/*
+!output/artifacts/.gitkeep
 
 # Logs
 *.log
 dashboard.log
 security_audit.log
+server.log
 
 # Temporary files
 *.tmp
@@ -66,3 +77,13 @@ analysis_results.json
 
 # Cache
 .cache/
+
+# Coverage reports
+.coverage
+.coveragerc
+htmlcov/
+output/coverage/
+
+# Test artifacts
+.pytest_cache/
+output/test-results/

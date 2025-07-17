@@ -1,5 +1,38 @@
 # Changelog
 
+## [1.0.8] - 2025-07-17
+
+### Major Changes
+- 🗂️ **Complete folder restructuring**: Reorganized entire codebase following Python best practices
+  - Moved all source code to `src/` directory
+  - Created organized directories: `data/`, `output/`, `scripts/`, `config/`, `docs/`, `deployment/`
+  - Achieved clean root directory with only 7 essential files
+  - Moved 340+ generated files out of root into organized directories
+
+- 🧹 **Ollama removal completed**: Removed all remaining Ollama references from UI
+  - Removed Ollama option from provider dropdown
+  - Removed Ollama settings section from HTML
+  - Removed/commented out loadOllamaModels() and changeOllamaModel() JavaScript functions
+  - Application now exclusively uses OpenAI
+
+### Technical Improvements
+- **Import system**: Updated all imports to use relative imports within `src/`
+- **Path configuration**: Fixed Flask template/static paths to use absolute paths
+- **Test organization**: Reorganized tests into `unit/`, `integration/`, and `e2e/` subdirectories
+- **Configuration management**: Centralized all config files in `config/` directory
+- **Documentation structure**: Organized docs into `api/`, `setup/`, and `technical/` subdirectories
+
+### Bug Fixes
+- ✅ **Template path fix**: Fixed TemplateNotFound error by using absolute paths in Flask initialization
+- ✅ **Model configuration**: Fixed "new-model" invalid configuration, set to gpt-4o
+- ✅ **Import resolution**: Updated all import statements for new folder structure
+
+## [1.0.7] - 2025-07-16
+
+### Bug Fixes
+- ✅ **Model info display fix**: Fixed issue where model information was not displaying correctly in the UI
+- ✅ **Provider switching UI**: Improved provider switching interface behavior and error handling
+
 ## [1.0.6] - 2025-07-16
 
 ### Enhancements

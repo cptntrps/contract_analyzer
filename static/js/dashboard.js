@@ -786,11 +786,6 @@ function updateAnalysisTable() {
                 </button>
             </td>
             <td>
-                <button class="download-btn" onclick="downloadReport('${result.id}', 'summary')" title="Download Summary Report">
-                    <i class="fas fa-file-pdf"></i>
-                </button>
-            </td>
-            <td>
                 <button class="download-btn" onclick="downloadWordComRedlined('${result.id}')" title="Download Word Track Changes">
                     <i class="fas fa-file-word"></i>
                     <span style="font-size: 0.7em; margin-left: 2px;">TC</span>
@@ -1047,11 +1042,6 @@ function downloadReport(resultId, reportType) {
             endpoint: '/api/generate-changes-table',
             filename: 'changes_table.xlsx',
             icon: 'fas fa-table'
-        },
-        'summary': {
-            endpoint: '/api/generate-summary-report',
-            filename: 'summary_report.pdf',
-            icon: 'fas fa-file-pdf'
         }
     };
     
@@ -1106,8 +1096,6 @@ function generateSelectedReports() {
     selectedTypes.review_docx = document.getElementById('generateReviewDoc').checked;
     selectedTypes.changes_xlsx = document.getElementById('generateChangesTable').checked;
     selectedTypes.changes_docx = document.getElementById('generateChangesTableDocx').checked;
-    selectedTypes.summary_pdf = document.getElementById('generateSummaryPdf').checked;
-    selectedTypes.summary_docx = document.getElementById('generateSummaryDocx').checked;
     
     // Get selected contracts (if any)
     const selectedContracts = getSelectedContracts();
@@ -1593,8 +1581,7 @@ if (window.innerWidth <= 480) {
 function downloadReport(resultId, type) {
     const endpoints = {
         'review': '/api/download-redlined-document',
-        'changes': '/api/download-changes-table',
-        'summary': '/api/download-summary-report'
+        'changes': '/api/download-changes-table'
     };
     
     const endpoint = endpoints[type];
@@ -1846,15 +1833,9 @@ function loadLLMProviderInfo() {
                 
                 // Show/hide appropriate settings sections
                 const openaiSettings = document.getElementById('openai-settings');
-                const ollamaSettings = document.getElementById('ollama-settings');
                 
                 if (data.provider === 'openai') {
                     if (openaiSettings) openaiSettings.style.display = 'block';
-                    if (ollamaSettings) ollamaSettings.style.display = 'none';
-                } else if (data.provider === 'ollama') {
-                    if (openaiSettings) openaiSettings.style.display = 'none';
-                    if (ollamaSettings) ollamaSettings.style.display = 'block';
-                    loadOllamaModels();
                 }
                 
                 // Update model settings
@@ -1924,16 +1905,10 @@ function switchProvider(providerType) {
     
     // Show/hide appropriate settings sections
     const openaiSettings = document.getElementById('openai-settings');
-    const ollamaSettings = document.getElementById('ollama-settings');
     
     if (providerType === 'openai') {
         if (openaiSettings) openaiSettings.style.display = 'block';
-        if (ollamaSettings) ollamaSettings.style.display = 'none';
         loadOpenAIModels();
-    } else if (providerType === 'ollama') {
-        if (openaiSettings) openaiSettings.style.display = 'none';
-        if (ollamaSettings) ollamaSettings.style.display = 'block';
-        loadOllamaModels();
     }
     
     // Update provider in backend
@@ -1942,81 +1917,81 @@ function switchProvider(providerType) {
     // Update provider display
     const providerElement = document.getElementById('current-provider');
     if (providerElement) {
-        providerElement.textContent = providerType === 'openai' ? 'OpenAI' : 'Ollama';
+        providerElement.textContent = 'OpenAI';
     }
 }
 
-function loadOllamaModels() {
-    console.log('Loading Ollama models...');
-    
-    fetch('/api/available-models')
-        .then(response => response.json())
-        .then(data => {
-            const ollamaSelect = document.getElementById('ollamaModel');
-            if (!ollamaSelect) return;
-            
-            if (data.success && data.models) {
-                ollamaSelect.innerHTML = '';
-                
-                data.models.forEach(model => {
-                    const option = document.createElement('option');
-                    option.value = model.name;
-                    const sizeGB = (model.size / (1024 * 1024 * 1024)).toFixed(1);
-                    option.textContent = `${model.name} (${sizeGB} GB)`;
-                    
-                    if (model.current) {
-                        option.selected = true;
-                    }
-                    
-                    ollamaSelect.appendChild(option);
-                });
-                
-                ollamaSelect.addEventListener('change', function() {
-                    if (this.value) {
-                        changeOllamaModel(this.value);
-                    }
-                });
-            } else {
-                ollamaSelect.innerHTML = '<option value="">Error loading models</option>';
-            }
-        })
-        .catch(error => {
-            console.error('Error loading Ollama models:', error);
-            const ollamaSelect = document.getElementById('ollamaModel');
-            if (ollamaSelect) {
-                ollamaSelect.innerHTML = '<option value="">Error loading models</option>';
-            }
-        });
-}
-
-function changeOllamaModel(modelName) {
-    console.log('Changing Ollama model to:', modelName);
-    
-    showNotification('Changing Ollama model...', 'info');
-    
-    fetch('/api/change-model', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            model: modelName
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            showNotification(`Model changed to ${modelName}`, 'success');
-            loadModelInfo();
-        } else {
-            showNotification(`Model change failed: ${data.message}`, 'error');
-        }
-    })
-    .catch(error => {
-        console.error('Error changing Ollama model:', error);
-        showNotification('Error changing model', 'error');
-    });
-}
+// REMOVED: function loadOllamaModels() {
+// REMOVED:     console.log('Loading Ollama models...');
+// REMOVED:     
+// REMOVED:     fetch('/api/available-models')
+// REMOVED:         .then(response => response.json())
+// REMOVED:         .then(data => {
+// REMOVED:             const ollamaSelect = document.getElementById('ollamaModel');
+// REMOVED:             if (!ollamaSelect) return;
+// REMOVED:             
+// REMOVED:             if (data.success && data.models) {
+// REMOVED:                 ollamaSelect.innerHTML = '';
+// REMOVED:                 
+// REMOVED:                 data.models.forEach(model => {
+// REMOVED:                     const option = document.createElement('option');
+// REMOVED:                     option.value = model.name;
+// REMOVED:                     const sizeGB = (model.size / (1024 * 1024 * 1024)).toFixed(1);
+// REMOVED:                     option.textContent = `${model.name} (${sizeGB} GB)`;
+// REMOVED:                     
+// REMOVED:                     if (model.current) {
+// REMOVED:                         option.selected = true;
+// REMOVED:                     }
+// REMOVED:                     
+// REMOVED:                     ollamaSelect.appendChild(option);
+// REMOVED:                 });
+// REMOVED:                 
+// REMOVED:                 ollamaSelect.addEventListener('change', function() {
+// REMOVED:                     if (this.value) {
+// REMOVED:                         changeOllamaModel(this.value);
+// REMOVED:                     }
+// REMOVED:                 });
+// REMOVED:             } else {
+// REMOVED:                 ollamaSelect.innerHTML = '<option value="">Error loading models</option>';
+// REMOVED:             }
+// REMOVED:         })
+// REMOVED:         .catch(error => {
+// REMOVED:             console.error('Error loading Ollama models:', error);
+// REMOVED:             const ollamaSelect = document.getElementById('ollamaModel');
+// REMOVED:             if (ollamaSelect) {
+// REMOVED:                 ollamaSelect.innerHTML = '<option value="">Error loading models</option>';
+// REMOVED:             }
+// REMOVED:         });
+// REMOVED: }
+// REMOVED: 
+// REMOVED: function changeOllamaModel(modelName) {
+// REMOVED:     console.log('Changing Ollama model to:', modelName);
+// REMOVED:     
+// REMOVED:     showNotification('Changing Ollama model...', 'info');
+// REMOVED:     
+// REMOVED:     fetch('/api/change-model', {
+// REMOVED:         method: 'POST',
+// REMOVED:         headers: {
+// REMOVED:             'Content-Type': 'application/json',
+// REMOVED:         },
+// REMOVED:         body: JSON.stringify({
+// REMOVED:             model: modelName
+// REMOVED:         })
+// REMOVED:     })
+// REMOVED:     .then(response => response.json())
+// REMOVED:     .then(data => {
+// REMOVED:         if (data.success) {
+// REMOVED:             showNotification(`Model changed to ${modelName}`, 'success');
+// REMOVED:             loadModelInfo();
+// REMOVED:         } else {
+// REMOVED:             showNotification(`Model change failed: ${data.message}`, 'error');
+// REMOVED:         }
+// REMOVED:     })
+// REMOVED:     .catch(error => {
+// REMOVED:         console.error('Error changing Ollama model:', error);
+// REMOVED:         showNotification('Error changing model', 'error');
+// REMOVED:     });
+// REMOVED: }
 
 function updateLLMProvider(providerType) {
     console.log('Updating LLM provider to:', providerType);

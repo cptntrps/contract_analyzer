@@ -1,6 +1,0 @@
-flask
-python-docx
-ollama
-requests
-openai 
-werkzeug 
