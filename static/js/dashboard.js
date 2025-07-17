@@ -605,6 +605,35 @@ function generateBatchReports() {
     }, 2000);
 }
 
+function clearAllContracts() {
+    if (confirm('Are you sure you want to clear all contracts? This will remove all uploaded contracts and their analysis results. This action cannot be undone.')) {
+        console.log('Clearing all contracts...');
+        
+        showNotification('Clearing contracts...', 'info');
+        
+        // Clear only contracts
+        fetch('/api/clear-contracts', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification(data.message, 'success');
+                loadDashboardData(); // Refresh the dashboard
+            } else {
+                showNotification('Failed to clear contracts: ' + data.error, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error clearing contracts:', error);
+            showNotification('Error clearing contracts', 'error');
+        });
+    }
+}
+
 function clearAllFiles() {
     if (confirm('Are you sure you want to clear all files? This action cannot be undone.')) {
         console.log('Clearing all files...');

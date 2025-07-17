@@ -912,6 +912,56 @@ class DashboardServer:
                 logger.error(f"Cache stats failed: {e}")
                 return jsonify({'error': str(e)}), 500
 
+        @self.app.route('/api/clear-contracts', methods=['POST'])
+        def clear_contracts():
+            """Clear all uploaded contracts"""
+            try:
+                cleared_count = 0
+                failed_files = []
+                
+                # Remove all contract files from filesystem
+                for contract in self.contracts:
+                    try:
+                        file_path = Path(contract['path'])
+                        if file_path.exists():
+                            file_path.unlink()
+                            cleared_count += 1
+                            logger.info(f"Deleted contract file: {file_path}")
+                    except Exception as e:
+                        logger.error(f"Failed to delete {contract['path']}: {e}")
+                        failed_files.append(contract['name'])
+                
+                # Clear the contracts list
+                total_contracts = len(self.contracts)
+                self.contracts = []
+                
+                # Also clear any analysis results related to contracts
+                self.analysis_results = []
+                
+                # Audit log
+                audit_security_event('contracts_cleared', {
+                    'total_contracts': total_contracts,
+                    'cleared_count': cleared_count,
+                    'failed_count': len(failed_files),
+                    'user_ip': request.remote_addr
+                })
+                
+                message = f"Successfully cleared {cleared_count} contracts"
+                if failed_files:
+                    message += f". Failed to delete {len(failed_files)} files: {', '.join(failed_files)}"
+                
+                return jsonify({
+                    'success': True,
+                    'message': message,
+                    'cleared_count': cleared_count,
+                    'total_contracts': total_contracts,
+                    'failed_files': failed_files
+                }), 200
+                
+            except Exception as e:
+                logger.error(f"Failed to clear contracts: {e}")
+                return self.create_error_response(str(e), 500)
+
         # Add security headers to all responses
         @self.app.after_request
         def add_security_headers(response):

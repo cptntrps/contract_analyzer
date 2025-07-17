@@ -68,6 +68,7 @@ server.log
 # Configuration files with secrets
 config_local.py
 .env
+.env.docker
 config/.env
 # But allow example files
 !config/.env.example

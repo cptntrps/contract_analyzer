@@ -301,6 +301,24 @@ body {
     transform: translateY(-1px);
 }
 
+.action-btn.warning {
+    background: #f59e0b;
+    color: white;
+}
+
+.action-btn.warning:hover {
+    background: #d97706;
+}
+
+.action-btn.danger {
+    background: #ef4444;
+    color: white;
+}
+
+.action-btn.danger:hover {
+    background: #dc2626;
+}
+
 .table-container {
     overflow-x: auto;
 }
