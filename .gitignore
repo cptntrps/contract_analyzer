@@ -68,6 +68,9 @@ server.log
 # Configuration files with secrets
 config_local.py
 .env
+config/.env
+# But allow example files
+!config/.env.example
 
 # User configuration files
 user_config.json
