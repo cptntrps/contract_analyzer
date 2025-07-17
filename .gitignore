@@ -58,6 +58,9 @@ security_audit.log
 config_local.py
 .env
 
+# User configuration files
+user_config.json
+
 # Analysis results
 analysis_results.json
 

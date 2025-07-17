@@ -11,6 +11,8 @@ from typing import Dict, List, Optional, Any
 from config import config
 import requests
 from contextlib import contextmanager
+from user_config_manager import user_config
+from llm_providers import create_llm_provider
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -34,48 +36,49 @@ class LLMHandler:
     
     def __init__(self):
         """Initialize the LLMHandler with configuration"""
-        self.host = config.OLLAMA_HOST
-        self.model = config.OLLAMA_MODEL
-        self.timeout = config.OLLAMA_TIMEOUT
-        self.max_retries = config.OLLAMA_MAX_RETRIES
-        self.retry_delay = config.OLLAMA_RETRY_DELAY
-        self.temperature = config.LLM_TEMPERATURE
-        self.top_p = config.LLM_TOP_P
-        self.max_tokens = config.LLM_MAX_TOKENS
+        self._provider = None
+        self._provider_type = None
+        self._initialize_provider()
         
-        # Connection state
-        self._connection_healthy = None
-        self._last_check = 0
-        self._check_interval = 30  # seconds
-        
-        logger.info(f"LLM Handler initialized - Host: {self.host}, Model: {self.model}")
+        logger.info(f"LLM Handler initialized - Provider: {self._provider_type}, Model: {self.get_current_model()}")
+    
+    def _initialize_provider(self):
+        """Initialize the appropriate LLM provider"""
+        try:
+            # Get configuration from user config manager
+            provider_config = user_config.get_llm_config()
+            self._provider_type = provider_config.get('provider', 'openai')
+            
+            # Create provider instance
+            self._provider = create_llm_provider(self._provider_type, provider_config)
+            
+            logger.info(f"LLM Provider initialized: {self._provider_type}")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize LLM provider: {e}")
+            # Fallback to basic configuration
+            self._provider_type = 'openai'
+            self._provider = None
+    
+    def _ensure_provider(self):
+        """Ensure provider is initialized, reinitialize if needed"""
+        if self._provider is None:
+            self._initialize_provider()
+        return self._provider is not None
     
     def get_available_models(self) -> List[Dict[str, Any]]:
         """
-        Get list of available models from Ollama
+        Get list of available models from current provider
         
         Returns:
             List of model dictionaries with name, size, and other details
         """
         try:
-            response = requests.get(f"{self.host}/api/tags", timeout=5)
-            response.raise_for_status()
-            
-            models_data = response.json()
-            models = []
-            
-            for model in models_data.get('models', []):
-                model_info = {
-                    'name': model.get('name', ''),
-                    'size': model.get('size', 0),
-                    'digest': model.get('digest', ''),
-                    'modified_at': model.get('modified_at', ''),
-                    'details': model.get('details', {}),
-                    'current': model.get('name', '') == self.model
-                }
-                models.append(model_info)
-            
-            return models
+            if self._ensure_provider():
+                return self._provider.get_available_models()
+            else:
+                logger.warning("No provider available for getting models")
+                return []
             
         except Exception as e:
             logger.error(f"Failed to get available models: {e}")
@@ -92,67 +95,41 @@ class LLMHandler:
             Dict with success status and message
         """
         try:
-            # Validate model exists
-            available_models = self.get_available_models()
-            model_names = [m['name'] for m in available_models]
-            
-            if new_model not in model_names:
+            if not self._ensure_provider():
                 return {
                     'success': False,
-                    'message': f"Model '{new_model}' not available. Available models: {model_names}",
-                    'current_model': self.model
+                    'message': 'No provider available',
+                    'current_model': self.get_current_model()
                 }
             
-            # Test the new model with a simple prompt
-            old_model = self.model
-            self.model = new_model
+            # Use provider's change_model method
+            result = self._provider.change_model(new_model)
             
-            try:
-                # Reset connection state to force recheck
-                self._connection_healthy = None
-                self._last_check = 0
-                
-                # Test with a simple prompt
-                test_result = self._generate_with_ollama("Test prompt")
-                
-                if test_result:
-                    logger.info(f"Model changed from '{old_model}' to '{new_model}'")
-                    return {
-                        'success': True,
-                        'message': f"Model changed to '{new_model}' successfully",
-                        'previous_model': old_model,
-                        'current_model': new_model
-                    }
-                else:
-                    # Revert to old model if test failed
-                    self.model = old_model
-                    return {
-                        'success': False,
-                        'message': f"Model '{new_model}' failed test. Reverted to '{old_model}'",
-                        'current_model': old_model
-                    }
-                    
-            except Exception as e:
-                # Revert to old model on error
-                self.model = old_model
-                logger.error(f"Model change failed: {e}")
-                return {
-                    'success': False,
-                    'message': f"Model change failed: {str(e)}. Reverted to '{old_model}'",
-                    'current_model': old_model
-                }
-                
+            # If successful and using OpenAI, update user config
+            if result.get('success') and self._provider_type == 'openai':
+                user_config.update_openai_model(new_model)
+            
+            return result
+            
         except Exception as e:
             logger.error(f"Model change error: {e}")
             return {
                 'success': False,
                 'message': f"Model change error: {str(e)}",
-                'current_model': self.model
+                'current_model': self.get_current_model()
             }
     
     def get_current_model(self) -> str:
         """Get the currently active model"""
-        return self.model
+        try:
+            if self._ensure_provider():
+                return self._provider.get_current_model()
+            else:
+                # Fallback to user config
+                return user_config.get_openai_model()
+        except Exception as e:
+            logger.error(f"Failed to get current model: {e}")
+            return "unknown"
     
     def get_model_info(self) -> Dict[str, Any]:
         """
@@ -233,45 +210,24 @@ class LLMHandler:
     
     def check_connection(self) -> bool:
         """
-        Check if Ollama is running and accessible with caching
+        Check if current provider is accessible
         
         Returns:
             bool: True if connection successful, False otherwise
         """
-        current_time = time.time()
-        
-        # Use cached result if within check interval
-        if (self._connection_healthy is not None and 
-            current_time - self._last_check < self._check_interval):
-            return self._connection_healthy
-        
         try:
-            with self._handle_ollama_errors("connection check"):
-                response = requests.get(f"{self.host}/api/tags", timeout=5)
-                response.raise_for_status()
-                
-                models = response.json()
-                available_models = [m['name'] for m in models.get('models', [])]
-                
-                if self.model not in available_models:
-                    logger.warning(f"Model {self.model} not available. Available: {available_models}")
-                    self._connection_healthy = False
-                else:
-                    logger.debug(f"Connection healthy. Model {self.model} available.")
-                    self._connection_healthy = True
-                
-                self._last_check = current_time
-                return self._connection_healthy
+            if self._ensure_provider():
+                return self._provider.check_connection()
+            else:
+                return False
                 
         except Exception as e:
             logger.error(f"Connection check failed: {e}")
-            self._connection_healthy = False
-            self._last_check = current_time
             return False
     
-    def _generate_with_ollama(self, prompt: str) -> str:
+    def _generate_with_provider(self, prompt: str) -> str:
         """
-        Generate response using Ollama with error handling
+        Generate response using current provider with error handling
         
         Args:
             prompt: The prompt to send to the model
@@ -279,21 +235,15 @@ class LLMHandler:
         Returns:
             str: The generated response
         """
-        with self._handle_ollama_errors("text generation"):
-            response = ollama.generate(
-                model=self.model,
-                prompt=prompt,
-                options={
-                    'temperature': self.temperature,
-                    'top_p': self.top_p,
-                    'num_predict': self.max_tokens
-                }
-            )
-            
-            if not response or 'response' not in response:
-                raise LLMAnalysisError("Empty or invalid response from Ollama")
-            
-            return response['response']
+        try:
+            if self._ensure_provider():
+                return self._provider._generate_response(prompt)
+            else:
+                raise LLMAnalysisError("No provider available")
+                
+        except Exception as e:
+            logger.error(f"Provider generation failed: {e}")
+            raise LLMAnalysisError(f"Provider generation failed: {e}")
     
     def _parse_analysis_response(self, response_text: str, deleted_text: str, inserted_text: str) -> Dict[str, Any]:
         """
@@ -568,7 +518,7 @@ CLASSIFICATION: [CRITICAL, SIGNIFICANT, or INCONSEQUENTIAL]
         
         try:
             # Use retry mechanism for LLM generation
-            response_text = self._retry_with_backoff(self._generate_with_ollama, prompt)
+            response_text = self._retry_with_backoff(self._generate_with_provider, prompt)
             return self._parse_analysis_response(response_text, deleted_text, inserted_text)
             
         except Exception as e:
@@ -640,32 +590,25 @@ CLASSIFICATION: [CRITICAL, SIGNIFICANT, or INCONSEQUENTIAL]
             Dict: Health status information
         """
         try:
-            connection_ok = self.check_connection()
-            
-            if connection_ok:
-                # Test with a simple prompt
-                test_result = self.get_change_analysis("test", "test")
-                analysis_ok = test_result.get('confidence') == 'high'
+            if self._ensure_provider():
+                return self._provider.get_health_status()
             else:
-                analysis_ok = False
-            
-            return {
-                'connection_healthy': connection_ok,
-                'analysis_functional': analysis_ok,
-                'host': self.host,
-                'model': self.model,
-                'last_check': self._last_check,
-                'status': 'healthy' if connection_ok and analysis_ok else 'degraded'
-            }
+                return {
+                    'connection_healthy': False,
+                    'analysis_functional': False,
+                    'provider': self._provider_type,
+                    'model': self.get_current_model(),
+                    'status': 'unhealthy',
+                    'error': 'No provider available'
+                }
             
         except Exception as e:
             logger.error(f"Health check failed: {e}")
             return {
                 'connection_healthy': False,
                 'analysis_functional': False,
-                'host': self.host,
-                'model': self.model,
-                'last_check': self._last_check,
+                'provider': self._provider_type,
+                'model': self.get_current_model(),
                 'status': 'unhealthy',
                 'error': str(e)
             }

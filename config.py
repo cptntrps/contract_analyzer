@@ -33,12 +33,23 @@ class Config:
     ALLOWED_EXTENSIONS = os.getenv('ALLOWED_EXTENSIONS', 'docx').split(',')
     MAX_FILENAME_LENGTH = int(os.getenv('MAX_FILENAME_LENGTH', '255'))
     
+    # === LLM PROVIDER CONFIGURATION ===
+    LLM_PROVIDER = os.getenv('LLM_PROVIDER', 'ollama')  # 'ollama' or 'openai'
+    
     # === OLLAMA CONFIGURATION ===
     OLLAMA_HOST = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
     OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'llama3:8b')
     OLLAMA_TIMEOUT = int(os.getenv('OLLAMA_TIMEOUT', '30'))
     OLLAMA_MAX_RETRIES = int(os.getenv('OLLAMA_MAX_RETRIES', '3'))
     OLLAMA_RETRY_DELAY = int(os.getenv('OLLAMA_RETRY_DELAY', '2'))
+    
+    # === OPENAI CONFIGURATION ===
+    OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+    OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-4o')  # Default to recommended model
+    OPENAI_TIMEOUT = int(os.getenv('OPENAI_TIMEOUT', '30'))
+    OPENAI_MAX_RETRIES = int(os.getenv('OPENAI_MAX_RETRIES', '3'))
+    OPENAI_RETRY_DELAY = int(os.getenv('OPENAI_RETRY_DELAY', '2'))
+    OPENAI_BASE_URL = os.getenv('OPENAI_BASE_URL', 'https://api.openai.com/v1')
     
     # === LLM PARAMETERS ===
     LLM_TEMPERATURE = float(os.getenv('LLM_TEMPERATURE', '0.1'))
@@ -119,22 +130,42 @@ class Config:
         if cls.PORT < 1024 or cls.PORT > 65535:
             errors.append("FLASK_PORT must be between 1024 and 65535")
         
+        # Validate LLM provider configuration
+        if cls.LLM_PROVIDER not in ['ollama', 'openai']:
+            errors.append("LLM_PROVIDER must be either 'ollama' or 'openai'")
+        
+        if cls.LLM_PROVIDER == 'openai' and not cls.OPENAI_API_KEY:
+            errors.append("OPENAI_API_KEY is required when LLM_PROVIDER is 'openai'")
+        
         return errors
     
     @classmethod
     def get_summary(cls):
         """Get configuration summary for logging"""
-        return {
+        summary = {
             'flask_host': cls.HOST,
             'flask_port': cls.PORT,
             'debug': cls.DEBUG,
-            'ollama_host': cls.OLLAMA_HOST,
-            'ollama_model': cls.OLLAMA_MODEL,
+            'llm_provider': cls.LLM_PROVIDER,
             'upload_folder': cls.UPLOAD_FOLDER,
             'max_file_size': f"{cls.MAX_CONTENT_LENGTH // (1024*1024)}MB",
             'allowed_extensions': cls.ALLOWED_EXTENSIONS,
             'log_level': cls.LOG_LEVEL
         }
+        
+        # Add provider-specific info
+        if cls.LLM_PROVIDER == 'ollama':
+            summary.update({
+                'ollama_host': cls.OLLAMA_HOST,
+                'ollama_model': cls.OLLAMA_MODEL
+            })
+        elif cls.LLM_PROVIDER == 'openai':
+            summary.update({
+                'openai_model': cls.OPENAI_MODEL,
+                'openai_api_key': 'configured' if cls.OPENAI_API_KEY else 'not configured'
+            })
+        
+        return summary
 
 class DevelopmentConfig(Config):
     """Development configuration"""

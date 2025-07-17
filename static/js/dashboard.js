@@ -349,26 +349,40 @@ function loadModelInfo() {
             const infoDiv = document.getElementById('current-model-info');
             const modelStatusText = document.getElementById('model-status-text');
             
-            if (data.connection_healthy && data.info) {
+            if (data.name) {
                 // Update settings tab model info
-                const modelInfo = data.info;
-                const sizeInGB = (modelInfo.size / (1024 * 1024 * 1024)).toFixed(1);
+                const modelName = data.name;
                 const status = data.connection_healthy ? 'Connected' : 'Disconnected';
                 
-                infoDiv.innerHTML = `
-                    <strong>Current Model:</strong> ${modelInfo.name}<br>
-                    <strong>Size:</strong> ${sizeInGB} GB<br>
-                    <strong>Status:</strong> ${status}
-                `;
+                let infoHtml = `<strong>Current Model:</strong> ${modelName}<br>`;
+                
+                // Add size info if available (for Ollama)
+                if (data.info && data.info.size) {
+                    const sizeInGB = (data.info.size / (1024 * 1024 * 1024)).toFixed(1);
+                    infoHtml += `<strong>Size:</strong> ${sizeInGB} GB<br>`;
+                }
+                
+                infoHtml += `<strong>Status:</strong> ${status}`;
+                
+                if (infoDiv) {
+                    infoDiv.innerHTML = infoHtml;
+                }
                 
                 // Update header model status
                 if (modelStatusText) {
-                    modelStatusText.textContent = `${modelInfo.name} (${sizeInGB} GB)`;
+                    if (data.info && data.info.size) {
+                        const sizeInGB = (data.info.size / (1024 * 1024 * 1024)).toFixed(1);
+                        modelStatusText.textContent = `${modelName} (${sizeInGB} GB)`;
+                    } else {
+                        modelStatusText.textContent = modelName;
+                    }
                 }
                 
-                console.log('Model info loaded successfully:', modelInfo.name);
+                console.log('Model info loaded successfully:', modelName);
             } else {
-                infoDiv.innerHTML = 'Error loading model info';
+                if (infoDiv) {
+                    infoDiv.innerHTML = 'Error loading model info';
+                }
                 if (modelStatusText) {
                     modelStatusText.textContent = 'Model info unavailable';
                 }
@@ -376,8 +390,11 @@ function loadModelInfo() {
         })
         .catch(error => {
             console.error('Error loading model info:', error);
-            document.getElementById('current-model-info').innerHTML = 'Error loading model info';
+            const infoDiv = document.getElementById('current-model-info');
             const modelStatusText = document.getElementById('model-status-text');
+            if (infoDiv) {
+                infoDiv.innerHTML = 'Error loading model info';
+            }
             if (modelStatusText) {
                 modelStatusText.textContent = 'Error loading model';
             }
@@ -1266,14 +1283,23 @@ function loadSettings() {
     // Load current settings
     console.log('Loading settings...');
     
-    // Load available models for the dropdown
-    loadAvailableModels();
+    // Setup provider selector
+    setupProviderSelector();
+    
+    // Load OpenAI models and configuration
+    loadOpenAIModels();
+    
+    // Load LLM provider information
+    loadLLMProviderInfo();
     
     // Load current model info
     loadModelInfo();
     
     // Load cache statistics
     loadCacheStats();
+    
+    // Setup model settings event listeners
+    setupModelSettingsListeners();
 }
 
 function loadAvailableModels() {
@@ -1638,6 +1664,415 @@ function downloadWordComRedlined(resultId) {
 let modelSwitchInProgress = false;
 let availableModels = [];
 let currentModel = '';
+let currentProvider = 'openai';
+let openaiModels = [];
+
+// OpenAI Model Management Functions
+function loadOpenAIModels() {
+    console.log('Loading OpenAI models...');
+    
+    fetch('/api/openai-models')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                openaiModels = data.models;
+                updateOpenAIModelDropdown(data.models, data.current_model);
+                
+                if (data.recommendations) {
+                    console.log('OpenAI model recommendations:', data.recommendations);
+                }
+            } else {
+                console.error('Failed to load OpenAI models:', data.error);
+                showNotification('Failed to load OpenAI models', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error loading OpenAI models:', error);
+            showNotification('Error loading OpenAI models', 'error');
+        });
+}
+
+function updateOpenAIModelDropdown(models, currentModel) {
+    const modelSelect = document.getElementById('openaiModel');
+    const modelDescription = document.getElementById('model-description');
+    
+    if (!modelSelect) {
+        console.error('OpenAI model select element not found');
+        return;
+    }
+    
+    // Clear existing options
+    modelSelect.innerHTML = '';
+    
+    // Add default option
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = 'Select an OpenAI model...';
+    defaultOption.disabled = true;
+    modelSelect.appendChild(defaultOption);
+    
+    // Add model options
+    models.forEach(model => {
+        const option = document.createElement('option');
+        option.value = model.name;
+        option.textContent = `${model.name} - ${model.tier.toUpperCase()}`;
+        
+        if (model.recommended) {
+            option.textContent += ' ⭐ RECOMMENDED';
+            option.setAttribute('data-recommended', 'true');
+        }
+        
+        if (model.name === currentModel) {
+            option.selected = true;
+            updateModelDescription(model);
+        }
+        
+        modelSelect.appendChild(option);
+    });
+    
+    // Add change event listener
+    modelSelect.addEventListener('change', function() {
+        const selectedModel = this.value;
+        if (selectedModel) {
+            const model = openaiModels.find(m => m.name === selectedModel);
+            if (model) {
+                updateModelDescription(model);
+                changeOpenAIModel(selectedModel);
+            }
+        }
+    });
+    
+    console.log(`Updated OpenAI model dropdown with ${models.length} models`);
+}
+
+function updateModelDescription(model) {
+    const modelDescription = document.getElementById('model-description');
+    if (!modelDescription) return;
+    
+    modelDescription.innerHTML = `
+        <strong>${model.name}</strong><br>
+        ${model.description}<br>
+        <small>Context: ${model.context_window.toLocaleString()} tokens | Tier: ${model.tier}</small>
+    `;
+    
+    // Add recommended styling
+    if (model.recommended) {
+        modelDescription.classList.add('recommended');
+    } else {
+        modelDescription.classList.remove('recommended');
+    }
+}
+
+function changeOpenAIModel(modelName) {
+    if (modelSwitchInProgress) {
+        showNotification('Model change already in progress', 'warning');
+        return;
+    }
+    
+    modelSwitchInProgress = true;
+    const modelSelect = document.getElementById('openaiModel');
+    
+    console.log('Changing OpenAI model to:', modelName);
+    
+    // Add loading animation
+    modelSelect.classList.add('model-switching');
+    modelSelect.disabled = true;
+    
+    showNotification('Changing model...', 'info');
+    
+    fetch('/api/update-openai-model', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            model: modelName
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            currentModel = modelName;
+            showNotification(`Model changed to ${modelName}`, 'success');
+            
+            // Update model info display
+            loadModelInfo();
+            loadLLMProviderInfo();
+            
+            console.log('Model change successful');
+        } else {
+            showNotification(`Model change failed: ${data.error}`, 'error');
+            console.error('Model change failed:', data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error changing model:', error);
+        showNotification('Error changing model', 'error');
+    })
+    .finally(() => {
+        modelSwitchInProgress = false;
+        modelSelect.classList.remove('model-switching');
+        modelSelect.disabled = false;
+    });
+}
+
+function loadLLMProviderInfo() {
+    console.log('Loading LLM provider information...');
+    
+    fetch('/api/llm-provider')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                currentProvider = data.provider;
+                currentModel = data.model;
+                
+                // Update provider selector
+                const providerSelector = document.getElementById('providerSelector');
+                if (providerSelector) {
+                    providerSelector.value = data.provider;
+                }
+                
+                // Update provider display
+                const providerElement = document.getElementById('current-provider');
+                const healthElement = document.getElementById('provider-health');
+                
+                if (providerElement) {
+                    providerElement.textContent = data.provider.toUpperCase();
+                }
+                
+                if (healthElement) {
+                    healthElement.className = `health-indicator ${data.api_key_configured ? 'health-healthy' : 'health-unhealthy'}`;
+                }
+                
+                // Show/hide appropriate settings sections
+                const openaiSettings = document.getElementById('openai-settings');
+                const ollamaSettings = document.getElementById('ollama-settings');
+                
+                if (data.provider === 'openai') {
+                    if (openaiSettings) openaiSettings.style.display = 'block';
+                    if (ollamaSettings) ollamaSettings.style.display = 'none';
+                } else if (data.provider === 'ollama') {
+                    if (openaiSettings) openaiSettings.style.display = 'none';
+                    if (ollamaSettings) ollamaSettings.style.display = 'block';
+                    loadOllamaModels();
+                }
+                
+                // Update model settings
+                updateModelSettings(data.temperature, data.max_tokens);
+                
+                console.log('LLM provider info loaded:', data);
+            } else {
+                console.error('Failed to load LLM provider info');
+            }
+        })
+        .catch(error => {
+            console.error('Error loading LLM provider info:', error);
+        });
+}
+
+function updateModelSettings(temperature, maxTokens) {
+    const temperatureSlider = document.getElementById('temperatureSlider');
+    const temperatureValue = document.getElementById('temperatureValue');
+    const maxTokensInput = document.getElementById('maxTokensInput');
+    
+    if (temperatureSlider && temperatureValue) {
+        temperatureSlider.value = temperature;
+        temperatureValue.textContent = temperature;
+    }
+    
+    if (maxTokensInput) {
+        maxTokensInput.value = maxTokens;
+    }
+}
+
+function setupModelSettingsListeners() {
+    const temperatureSlider = document.getElementById('temperatureSlider');
+    const temperatureValue = document.getElementById('temperatureValue');
+    const maxTokensInput = document.getElementById('maxTokensInput');
+    
+    if (temperatureSlider && temperatureValue) {
+        temperatureSlider.addEventListener('input', function() {
+            temperatureValue.textContent = this.value;
+        });
+        
+        temperatureSlider.addEventListener('change', function() {
+            updateLLMSettings({ temperature: parseFloat(this.value) });
+        });
+    }
+    
+    if (maxTokensInput) {
+        maxTokensInput.addEventListener('change', function() {
+            updateLLMSettings({ max_tokens: parseInt(this.value) });
+        });
+    }
+}
+
+function setupProviderSelector() {
+    const providerSelector = document.getElementById('providerSelector');
+    if (providerSelector) {
+        providerSelector.addEventListener('change', function() {
+            switchProvider(this.value);
+        });
+    }
+}
+
+function switchProvider(providerType) {
+    console.log('Switching to provider:', providerType);
+    
+    // Show loading state
+    showNotification('Switching LLM provider...', 'info');
+    
+    // Show/hide appropriate settings sections
+    const openaiSettings = document.getElementById('openai-settings');
+    const ollamaSettings = document.getElementById('ollama-settings');
+    
+    if (providerType === 'openai') {
+        if (openaiSettings) openaiSettings.style.display = 'block';
+        if (ollamaSettings) ollamaSettings.style.display = 'none';
+        loadOpenAIModels();
+    } else if (providerType === 'ollama') {
+        if (openaiSettings) openaiSettings.style.display = 'none';
+        if (ollamaSettings) ollamaSettings.style.display = 'block';
+        loadOllamaModels();
+    }
+    
+    // Update provider in backend
+    updateLLMProvider(providerType);
+    
+    // Update provider display
+    const providerElement = document.getElementById('current-provider');
+    if (providerElement) {
+        providerElement.textContent = providerType === 'openai' ? 'OpenAI' : 'Ollama';
+    }
+}
+
+function loadOllamaModels() {
+    console.log('Loading Ollama models...');
+    
+    fetch('/api/available-models')
+        .then(response => response.json())
+        .then(data => {
+            const ollamaSelect = document.getElementById('ollamaModel');
+            if (!ollamaSelect) return;
+            
+            if (data.success && data.models) {
+                ollamaSelect.innerHTML = '';
+                
+                data.models.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.name;
+                    const sizeGB = (model.size / (1024 * 1024 * 1024)).toFixed(1);
+                    option.textContent = `${model.name} (${sizeGB} GB)`;
+                    
+                    if (model.current) {
+                        option.selected = true;
+                    }
+                    
+                    ollamaSelect.appendChild(option);
+                });
+                
+                ollamaSelect.addEventListener('change', function() {
+                    if (this.value) {
+                        changeOllamaModel(this.value);
+                    }
+                });
+            } else {
+                ollamaSelect.innerHTML = '<option value="">Error loading models</option>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading Ollama models:', error);
+            const ollamaSelect = document.getElementById('ollamaModel');
+            if (ollamaSelect) {
+                ollamaSelect.innerHTML = '<option value="">Error loading models</option>';
+            }
+        });
+}
+
+function changeOllamaModel(modelName) {
+    console.log('Changing Ollama model to:', modelName);
+    
+    showNotification('Changing Ollama model...', 'info');
+    
+    fetch('/api/change-model', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            model: modelName
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification(`Model changed to ${modelName}`, 'success');
+            loadModelInfo();
+        } else {
+            showNotification(`Model change failed: ${data.message}`, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error changing Ollama model:', error);
+        showNotification('Error changing model', 'error');
+    });
+}
+
+function updateLLMProvider(providerType) {
+    console.log('Updating LLM provider to:', providerType);
+    
+    // Note: This would update the provider in the backend
+    // For now, we'll update the user config
+    fetch('/api/user-config', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            llm_settings: {
+                provider: providerType
+            }
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            console.log('Provider updated successfully');
+            // Refresh model info
+            loadModelInfo();
+        } else {
+            console.error('Failed to update provider:', data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error updating provider:', error);
+    });
+}
+
+function updateLLMSettings(settings) {
+    console.log('Updating LLM settings:', settings);
+    
+    fetch('/api/update-llm-settings', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(settings)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification('Settings updated successfully', 'success');
+            console.log('LLM settings updated:', data.updated_settings);
+        } else {
+            showNotification(`Settings update failed: ${data.error}`, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error updating LLM settings:', error);
+        showNotification('Error updating settings', 'error');
+    });
+}
 
 // Debug function for testing tabs (call from browser console)
 function testTabs() {

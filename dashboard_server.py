@@ -25,6 +25,8 @@ from security import (
 from analyzer import ContractAnalyzer
 from llm_handler import LLMHandler
 from enhanced_report_generator import EnhancedReportGenerator
+from user_config_manager import user_config
+from llm_providers import create_llm_provider
 
 # Configure logging
 logging.basicConfig(
@@ -259,6 +261,206 @@ class DashboardServer:
                     'name': self.llm_handler.get_current_model(),
                     'error': str(e)
                 }), 500
+
+        @self.app.route('/api/user-config')
+        def get_user_config():
+            """Get user configuration settings"""
+            try:
+                config_data = user_config.get_all_settings()
+                return jsonify({
+                    'success': True,
+                    'config': config_data
+                }), 200
+            except Exception as e:
+                logger.error(f"Failed to get user config: {e}")
+                return self.create_error_response(str(e), 500)
+
+        @self.app.route('/api/user-config', methods=['POST'])
+        def update_user_config():
+            """Update user configuration settings"""
+            try:
+                data = request.get_json()
+                if not data:
+                    return jsonify({'success': False, 'error': 'No data provided'}), 400
+                
+                # Update specific settings
+                for section, settings in data.items():
+                    if isinstance(settings, dict):
+                        for key, value in settings.items():
+                            user_config.set_setting(section, key, value)
+                
+                # Audit log
+                audit_security_event('config_updated', {
+                    'sections': list(data.keys()),
+                    'user_ip': request.remote_addr
+                })
+                
+                return jsonify({
+                    'success': True,
+                    'message': 'Configuration updated successfully'
+                }), 200
+                
+            except Exception as e:
+                logger.error(f"Failed to update user config: {e}")
+                return self.create_error_response(str(e), 500)
+
+        @self.app.route('/api/openai-models')
+        def get_openai_models():
+            """Get available OpenAI models with descriptions"""
+            try:
+                # Create a temporary OpenAI provider to get model info
+                provider_config = user_config.get_llm_config()
+                if provider_config.get('provider') == 'openai' and provider_config.get('api_key'):
+                    provider = create_llm_provider('openai', provider_config)
+                    models = provider.get_available_models()
+                    recommendations = provider.get_model_recommendations()
+                    
+                    return jsonify({
+                        'success': True,
+                        'models': models,
+                        'recommendations': recommendations,
+                        'current_model': user_config.get_openai_model()
+                    }), 200
+                else:
+                    # Return static model info if no API key
+                    from llm_providers import OpenAIProvider
+                    models = []
+                    for model_key, model_info in OpenAIProvider.AVAILABLE_MODELS.items():
+                        models.append({
+                            'name': model_info['name'],
+                            'description': model_info['description'],
+                            'context_window': model_info['context_window'],
+                            'recommended': model_info['recommended'],
+                            'tier': model_info['tier'],
+                            'current': model_info['name'] == user_config.get_openai_model(),
+                            'provider': 'openai'
+                        })
+                    
+                    return jsonify({
+                        'success': True,
+                        'models': models,
+                        'current_model': user_config.get_openai_model(),
+                        'api_key_required': True
+                    }), 200
+                    
+            except Exception as e:
+                logger.error(f"Failed to get OpenAI models: {e}")
+                return self.create_error_response(str(e), 500)
+
+        @self.app.route('/api/update-openai-model', methods=['POST'])
+        def update_openai_model():
+            """Update the OpenAI model selection"""
+            try:
+                data = request.get_json()
+                if not data or 'model' not in data:
+                    return jsonify({'success': False, 'error': 'Model name is required'}), 400
+                
+                new_model = sanitize_input(data['model'])
+                
+                # Validate model
+                from llm_providers import OpenAIProvider
+                if new_model not in OpenAIProvider.AVAILABLE_MODELS:
+                    return jsonify({
+                        'success': False,
+                        'error': f'Invalid model: {new_model}',
+                        'available_models': list(OpenAIProvider.AVAILABLE_MODELS.keys())
+                    }), 400
+                
+                # Update the model
+                success = user_config.update_openai_model(new_model)
+                
+                if success:
+                    # Audit log
+                    audit_security_event('openai_model_changed', {
+                        'new_model': new_model,
+                        'user_ip': request.remote_addr
+                    })
+                    
+                    return jsonify({
+                        'success': True,
+                        'message': f'Model updated to {new_model}',
+                        'model': new_model
+                    }), 200
+                else:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Failed to update model'
+                    }), 500
+                    
+            except Exception as e:
+                logger.error(f"Failed to update OpenAI model: {e}")
+                return self.create_error_response(str(e), 500)
+
+        @self.app.route('/api/llm-provider')
+        def get_llm_provider():
+            """Get current LLM provider and configuration"""
+            try:
+                provider_config = user_config.get_llm_config()
+                
+                return jsonify({
+                    'success': True,
+                    'provider': provider_config.get('provider', 'openai'),
+                    'model': provider_config.get('model', 'gpt-4o'),
+                    'temperature': provider_config.get('temperature', 0.1),
+                    'max_tokens': provider_config.get('max_tokens', 1024),
+                    'api_key_configured': bool(provider_config.get('api_key'))
+                }), 200
+                
+            except Exception as e:
+                logger.error(f"Failed to get LLM provider info: {e}")
+                return self.create_error_response(str(e), 500)
+
+        @self.app.route('/api/update-llm-settings', methods=['POST'])
+        def update_llm_settings():
+            """Update LLM settings like temperature and max tokens"""
+            try:
+                data = request.get_json()
+                if not data:
+                    return jsonify({'success': False, 'error': 'No data provided'}), 400
+                
+                updated_settings = {}
+                
+                # Update temperature
+                if 'temperature' in data:
+                    temp = float(data['temperature'])
+                    if user_config.update_temperature(temp):
+                        updated_settings['temperature'] = temp
+                
+                # Update max tokens
+                if 'max_tokens' in data:
+                    max_tokens = int(data['max_tokens'])
+                    if user_config.update_max_tokens(max_tokens):
+                        updated_settings['max_tokens'] = max_tokens
+                
+                # Audit log
+                audit_security_event('llm_settings_updated', {
+                    'settings': updated_settings,
+                    'user_ip': request.remote_addr
+                })
+                
+                return jsonify({
+                    'success': True,
+                    'message': 'LLM settings updated successfully',
+                    'updated_settings': updated_settings
+                }), 200
+                
+            except Exception as e:
+                logger.error(f"Failed to update LLM settings: {e}")
+                return self.create_error_response(str(e), 500)
+
+        @self.app.route('/api/config-validation')
+        def validate_user_config():
+            """Validate current user configuration"""
+            try:
+                validation_result = user_config.validate_config()
+                return jsonify({
+                    'success': True,
+                    'validation': validation_result
+                }), 200
+                
+            except Exception as e:
+                logger.error(f"Failed to validate config: {e}")
+                return self.create_error_response(str(e), 500)
 
         @self.app.route('/api/contracts')
         def get_contracts():
