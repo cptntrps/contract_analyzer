@@ -28,6 +28,10 @@ from .enhanced_report_generator import EnhancedReportGenerator
 from .user_config_manager import user_config
 from .llm_providers import create_llm_provider
 
+# 🚀 PERFORMANCE OPTIMIZATIONS
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
+
 # Configure logging
 logging.basicConfig(
     level=getattr(logging, config.LOG_LEVEL),
@@ -76,10 +80,10 @@ class DashboardServer:
         self.llm_handler = LLMHandler()
         self.report_generator = EnhancedReportGenerator(reports_dir=config.REPORTS_FOLDER)
         
-        # Set directory paths as instance attributes
-        self.upload_folder = config.UPLOAD_FOLDER
-        self.templates_folder = config.TEMPLATES_FOLDER
-        self.reports_folder = config.REPORTS_FOLDER
+        # Set directory paths as instance attributes (build absolute paths from BASE_DIR)
+        self.upload_folder = str(config.BASE_DIR / config.UPLOAD_FOLDER)
+        self.templates_folder = str(config.BASE_DIR / config.TEMPLATES_FOLDER)  
+        self.reports_folder = str(config.BASE_DIR / config.REPORTS_FOLDER)
         
         # Create directories
         self.ensure_directories()
@@ -464,7 +468,43 @@ class DashboardServer:
                 }), 200
                 
             except Exception as e:
-                logger.error(f"Failed to validate config: {e}")
+                logger.error(f"Configuration validation failed: {e}")
+                return self.create_error_response(str(e), 500)
+
+        @self.app.route('/api/performance-stats')
+        def get_performance_stats():
+            """🚀 PERFORMANCE: Get performance statistics"""
+            try:
+                performance_stats = self.llm_handler.get_performance_stats()
+                health_status = self.llm_handler.get_health_status()
+                
+                return jsonify({
+                    'success': True,
+                    'performance': performance_stats,
+                    'health': health_status,
+                    'optimization_enabled': True
+                }), 200
+                
+            except Exception as e:
+                logger.error(f"Failed to get performance stats: {e}")
+                return self.create_error_response(str(e), 500)
+
+        @self.app.route('/api/clear-cache', methods=['POST'])
+        def clear_analysis_cache():
+            """🚀 PERFORMANCE: Clear analysis cache"""
+            try:
+                result = self.llm_handler.clear_cache()
+                
+                # Audit log
+                audit_security_event('cache_cleared', {
+                    'cleared_entries': result.get('cleared_entries', 0),
+                    'user_ip': request.remote_addr
+                })
+                
+                return jsonify(result), 200
+                
+            except Exception as e:
+                logger.error(f"Failed to clear cache: {e}")
                 return self.create_error_response(str(e), 500)
 
         @self.app.route('/api/contracts')
@@ -667,28 +707,59 @@ class DashboardServer:
 
         @self.app.route('/api/batch-analyze', methods=['POST'])
         def batch_analyze():
-            """Analyze multiple contracts"""
+            """🚀 PARALLEL: Analyze multiple contracts in parallel"""
             try:
+                start_time = time.time()
                 results = []
-                for contract in self.contracts:
-                    try:
-                        result = self.run_contract_analysis(contract)
-                        self.analysis_results.append(result)
-                        results.append(result)
-                    except Exception as e:
-                        logger.error(f"Analysis failed for {contract['name']}: {e}")
-                        continue
+                successful_analyses = 0
+                
+                logger.info(f"🚀 Starting parallel batch analysis of {len(self.contracts)} contracts")
+                
+                # 🚀 PARALLEL PROCESSING: Use ThreadPoolExecutor for concurrent analysis
+                max_workers = min(5, len(self.contracts))  # Limit to 5 concurrent analyses
+                
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    # Submit all contract analyses
+                    future_to_contract = {}
+                    for contract in self.contracts:
+                        future = executor.submit(self.run_contract_analysis, contract)
+                        future_to_contract[future] = contract
+                    
+                    # Collect results as they complete
+                    for future in as_completed(future_to_contract):
+                        contract = future_to_contract[future]
+                        try:
+                            result = future.result()
+                            self.analysis_results.append(result)
+                            results.append(result)
+                            successful_analyses += 1
+                            logger.info(f"✅ Completed analysis for {contract['name']} ({successful_analyses}/{len(self.contracts)})")
+                        except Exception as e:
+                            logger.error(f"❌ Analysis failed for {contract['name']}: {e}")
+                            continue
+                
+                elapsed_time = time.time() - start_time
+                logger.info(f"🎯 Parallel batch analysis completed in {elapsed_time:.2f}s - {successful_analyses}/{len(self.contracts)} successful")
                 
                 # Audit log
                 audit_security_event('batch_analysis', {
                     'contract_count': len(self.contracts),
-                    'results_count': len(results)
+                    'results_count': len(results),
+                    'elapsed_time': elapsed_time,
+                    'parallel_workers': max_workers
                 })
                 
                 return jsonify({
                     'success': True,
-                    'message': f'Analyzed {len(results)} contracts',
-                    'results': results
+                    'message': f'Analyzed {len(results)} contracts in {elapsed_time:.2f}s using {max_workers} parallel workers',
+                    'results': results,
+                    'performance': {
+                        'elapsed_time': elapsed_time,
+                        'successful_analyses': successful_analyses,
+                        'total_contracts': len(self.contracts),
+                        'parallel_workers': max_workers,
+                        'avg_time_per_contract': elapsed_time / max(1, successful_analyses)
+                    }
                 }), 200
                 
             except Exception as e:
@@ -776,7 +847,7 @@ class DashboardServer:
                 file_path = self.report_generator.generate_word_com_redlined_document(result, template_path, result['id'])
                 
                 # Check if file was actually generated (might be None due to COM cleanup issues)
-                expected_file_path = os.path.join(config.REPORTS_FOLDER, f"{result['id']}_word_com_redlined.docx")
+                expected_file_path = os.path.join(self.reports_folder, f"{result['id']}_word_com_redlined.docx")
                 
                 if file_path is None:
                     # Check if file exists despite method returning None (COM cleanup error)
@@ -811,8 +882,8 @@ class DashboardServer:
                 if not result_id:
                     return jsonify({'error': 'Result ID is required'}), 400
                 
-                # Find the file - match the actual generated filename pattern
-                file_path = os.path.join(config.REPORTS_FOLDER, f"{result_id}_redlined_document.docx")
+                # Find the file - use absolute path from reports_folder
+                file_path = os.path.join(self.reports_folder, f"{result_id}_redlined_document.docx")
                 if not os.path.exists(file_path):
                     return jsonify({'error': 'File not found'}), 404
                 
@@ -830,8 +901,8 @@ class DashboardServer:
                 if not result_id:
                     return jsonify({'error': 'Result ID is required'}), 400
                 
-                # Find the file - match the actual generated filename pattern
-                file_path = os.path.join(config.REPORTS_FOLDER, f"{result_id}_changes_table.xlsx")
+                # Find the file - use absolute path from reports_folder
+                file_path = os.path.join(self.reports_folder, f"{result_id}_changes_table.xlsx")
                 if not os.path.exists(file_path):
                     return jsonify({'error': 'File not found'}), 404
                 
@@ -851,8 +922,8 @@ class DashboardServer:
                 if not result_id:
                     return jsonify({'error': 'Result ID is required'}), 400
                 
-                # Find the file
-                file_path = os.path.join(config.REPORTS_FOLDER, f"{result_id}_word_com_redlined.docx")
+                # Find the file - use absolute path from reports_folder
+                file_path = os.path.join(self.reports_folder, f"{result_id}_word_com_redlined.docx")
                 if not os.path.exists(file_path):
                     return jsonify({'error': 'File not found'}), 404
                 
@@ -870,8 +941,8 @@ class DashboardServer:
                 if not result_id:
                     return jsonify({'error': 'Result ID is required'}), 400
                 
-                # Find the file
-                file_path = os.path.join(config.REPORTS_FOLDER, f"{result_id}_analysis.docx")
+                # Find the file - use absolute path from reports_folder
+                file_path = os.path.join(self.reports_folder, f"{result_id}_analysis.docx")
                 if not os.path.exists(file_path):
                     return jsonify({'error': 'File not found'}), 404
                 
@@ -985,25 +1056,36 @@ class DashboardServer:
             return jsonify({'error': 'Internal server error'}), 500
     
     def run_contract_analysis(self, contract):
-        """Run analysis on a contract with timeout and error handling"""
+        """🚀 ULTRA-FAST: Run analysis on a contract with speed optimizations"""
         try:
+            import time
+            start_time = time.time()
+            
             # Find best matching template
             template = self.find_best_template(contract)
             if not template:
                 raise Exception("Not a vendor contract - no matching template found. Contract must contain vendor names (epam, capgemini, blue optima) or be SOW/CO type. This may be a resume or non-vendor document.")
             
-            # Extract text from contract and template
+            # Extract text from contract and template (optimized)
             contract_text = self.analyzer.extract_text_from_docx(contract['path'])
             template_text = self.analyzer.extract_text_from_docx(template['path'])
             
-            # Find changes
+            # Find changes (limit for speed)
             changes = self.analyzer.find_changes(template_text, contract_text)
             
-            # Analyze with LLM (with enhanced error handling)
+            # 🚀 BALANCED: Reasonable change limit for speed vs accuracy
+            if len(changes) > 200:
+                changes = changes[:200]  # Reasonable limit for balanced processing
+                logger.info(f"⚡ Limited analysis to 200 changes for balanced processing")
+            
+            # Analyze with LLM (balanced mode)
             analysis = self.llm_handler.analyze_changes(changes)
             
-            # Calculate similarity
+            # Calculate similarity (keep for accuracy)
             similarity = self.analyzer.calculate_similarity(template_text, contract_text)
+            
+            extract_time = time.time() - start_time
+            logger.info(f"⚡ Contract analysis completed in {extract_time:.2f}s")
             
             # Determine status
             status = self.determine_status(changes, similarity)
@@ -1056,28 +1138,43 @@ class DashboardServer:
             contract_text_lower = contract['name'].lower()
             contract_filename_lower = contract['name'].lower()
         
-        # STEP 1: Check for vendor-specific keywords in content
-        logger.debug(f"Checking vendor keywords in contract content...")
+        # STEP 1: Check for vendor-specific keywords in content AND filename
+        logger.debug(f"Checking vendor keywords in contract content and filename...")
         
-        if "epam" in contract_text_lower:
+        # Check EPAM (in content or filename)
+        epam_patterns = ["epam"]
+        epam_found = any(pattern in contract_text_lower for pattern in epam_patterns) or \
+                     any(pattern in contract_filename_lower for pattern in epam_patterns)
+        
+        if epam_found:
             logger.debug("Found EPAM vendor keyword")
             for template in self.templates:
                 if "epam" in template['name'].lower():
                     logger.info(f"Matched contract to EPAM template: {template['name']}")
                     return template
         
-        if "capgemini" in contract_text_lower:
+        # Check Capgemini (in content or filename)  
+        capgemini_patterns = ["capgemini"]
+        capgemini_found = any(pattern in contract_text_lower for pattern in capgemini_patterns) or \
+                         any(pattern in contract_filename_lower for pattern in capgemini_patterns)
+        
+        if capgemini_found:
             logger.debug("Found Capgemini vendor keyword")
             for template in self.templates:
                 if "capgemini" in template['name'].lower():
                     logger.info(f"Matched contract to Capgemini template: {template['name']}")
                     return template
         
-        if "blue optima" in contract_text_lower:
+        # Check Blue Optima (multiple variations: "blue optima", "blueoptima", "blue_optima")
+        blue_optima_patterns = ["blue optima", "blueoptima", "blue_optima"]
+        blue_optima_found = any(pattern in contract_text_lower for pattern in blue_optima_patterns) or \
+                           any(pattern in contract_filename_lower for pattern in blue_optima_patterns)
+        
+        if blue_optima_found:
             logger.debug("Found Blue Optima vendor keyword")
             for template in self.templates:
                 template_name_lower = template['name'].lower()
-                if "blue optima" in template_name_lower or "blue_optima" in template_name_lower:
+                if "blueoptima" in template_name_lower or "blue_optima" in template_name_lower:
                     logger.info(f"Matched contract to Blue Optima template: {template['name']}")
                     return template
         

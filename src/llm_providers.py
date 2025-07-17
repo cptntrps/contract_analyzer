@@ -148,6 +148,15 @@ class OpenAIProvider(BaseLLMProvider):
     
     # OpenAI model definitions with descriptions
     AVAILABLE_MODELS = {
+        'gpt-4o-mini': {
+            'name': 'gpt-4o-mini',
+            'description': '🚀 FASTEST: Ultra-fast GPT-4-level model. 60% cheaper than gpt-4o. Perfect for batch processing and speed-critical tasks.',
+            'context_window': 128000,
+            'recommended': True,
+            'tier': 'gpt-4-mini',
+            'speed': 'ultra-fast',
+            'cost': 'ultra-cheap'
+        },
         'gpt-4o': {
             'name': 'gpt-4o',
             'description': 'Fastest and cheapest GPT-4-tier model. Multimodal (text, vision, audio input), high quality. Best for most tasks.',
@@ -186,34 +195,62 @@ class OpenAIProvider(BaseLLMProvider):
     }
     
     def __init__(self, config: Dict[str, Any]):
-        """Initialize OpenAI provider"""
+        """Initialize OpenAI provider with optimizations"""
         super().__init__(config)
         
         # OpenAI-specific configuration
         self.api_key = config.get('api_key')
-        self.model = config.get('model', 'gpt-4o')  # Default to recommended model
-        self.timeout = config.get('timeout', 30)
+        self.model = config.get('model', 'gpt-4o')  # Default to high-quality model
+        self.timeout = config.get('timeout', 15)  # ⚡ Reduced timeout for speed
         self.base_url = config.get('base_url', 'https://api.openai.com/v1')
+        
+        # 🚀 PERFORMANCE OPTIMIZATIONS
+        self.max_tokens = config.get('max_tokens', 512)  # ⚡ Reduced for faster responses
+        self.temperature = config.get('temperature', 0.1)  # ⚡ Lower for consistency
         
         # Validate API key
         if not self.api_key:
             raise ValueError("OpenAI API key is required")
         
-        # Import OpenAI client
+        # Import OpenAI client with optimizations
         try:
             import openai
+            import httpx
+            
+            # 🚀 CONNECTION POOLING: Create HTTP client with connection pooling
+            http_client = httpx.Client(
+                timeout=self.timeout,
+                limits=httpx.Limits(
+                    max_keepalive_connections=20,  # Connection pool size
+                    max_connections=100,           # Max total connections
+                    keepalive_expiry=30           # Keep connections alive for 30s
+                ),
+                headers={
+                    "User-Agent": "ContractAnalyzer/1.0 (Optimized)",
+                    "Connection": "keep-alive"
+                }
+            )
+            
             self.client = openai.OpenAI(
                 api_key=self.api_key,
-                timeout=self.timeout
+                timeout=self.timeout,
+                max_retries=2,  # ⚡ Reduced retries for speed
+                http_client=http_client
             )
         except ImportError:
-            raise ImportError("OpenAI package not installed. Run: pip install openai")
+            raise ImportError("OpenAI package not installed. Run: pip install openai httpx")
         
-        logger.info(f"OpenAI Provider initialized - Model: {self.model}")
+        logger.info(f"🚀 OpenAI Provider initialized (OPTIMIZED) - Model: {self.model}, Timeout: {self.timeout}s, Connection Pooling: Enabled")
     
     def _generate_response(self, prompt: str) -> str:
-        """Generate response using OpenAI API"""
+        """Generate response using OpenAI API with optimizations"""
         try:
+            # ⚡ OPTIMIZATION: Truncate extremely long prompts to save tokens
+            max_prompt_length = 8000  # Reasonable limit for batch processing
+            if len(prompt) > max_prompt_length:
+                prompt = prompt[:max_prompt_length] + "\n\n[TRUNCATED for speed]"
+                logger.warning(f"Truncated prompt to {max_prompt_length} characters for speed")
+            
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
@@ -221,13 +258,23 @@ class OpenAIProvider(BaseLLMProvider):
                 ],
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
-                timeout=self.timeout
+                timeout=self.timeout,
+                # ⚡ OPTIMIZATION: Additional speed settings
+                stream=False,  # Disable streaming for batch processing
+                frequency_penalty=0.0,  # Reduce processing overhead
+                presence_penalty=0.0    # Reduce processing overhead
             )
             
             if not response.choices or not response.choices[0].message:
                 raise LLMAnalysisError("Empty or invalid response from OpenAI")
             
-            return response.choices[0].message.content
+            content = response.choices[0].message.content
+            
+            # ⚡ OPTIMIZATION: Log token usage for monitoring
+            if hasattr(response, 'usage') and response.usage:
+                logger.debug(f"Tokens used: {response.usage.total_tokens} (prompt: {response.usage.prompt_tokens}, completion: {response.usage.completion_tokens})")
+            
+            return content
             
         except Exception as e:
             logger.error(f"OpenAI API error: {e}")
@@ -237,6 +284,8 @@ class OpenAIProvider(BaseLLMProvider):
                 raise LLMConnectionError("Invalid OpenAI API key")
             elif "model not found" in str(e).lower():
                 raise LLMConnectionError(f"Model {self.model} not found")
+            elif "timeout" in str(e).lower():
+                raise LLMConnectionError(f"Request timed out after {self.timeout}s")
             else:
                 raise LLMAnalysisError(f"OpenAI API error: {e}")
     

@@ -47,7 +47,14 @@ class Config:
     # === LLM PARAMETERS ===
     LLM_TEMPERATURE = float(os.getenv('LLM_TEMPERATURE', '0.1'))
     LLM_TOP_P = float(os.getenv('LLM_TOP_P', '0.9'))
-    LLM_MAX_TOKENS = int(os.getenv('LLM_MAX_TOKENS', '1024'))
+    LLM_MAX_TOKENS = int(os.getenv('LLM_MAX_TOKENS', '512'))  # ⚡ Reduced for speed
+    
+    # === 🚀 PERFORMANCE OPTIMIZATIONS ===
+    LLM_BATCH_SIZE = int(os.getenv('LLM_BATCH_SIZE', '10'))  # Changes per API call
+    LLM_USE_FAST_MODEL = os.getenv('LLM_USE_FAST_MODEL', 'true').lower() == 'true'
+    LLM_FAST_MODEL = os.getenv('LLM_FAST_MODEL', 'gpt-4o-mini')
+    LLM_TIMEOUT_OPTIMIZED = int(os.getenv('LLM_TIMEOUT_OPTIMIZED', '15'))  # Faster timeout
+    LLM_MAX_PROMPT_LENGTH = int(os.getenv('LLM_MAX_PROMPT_LENGTH', '8000'))  # Truncate long prompts
     
     # === SECURITY SETTINGS ===
     SECURE_FILENAME_ENABLED = os.getenv('SECURE_FILENAME_ENABLED', 'true').lower() == 'true'

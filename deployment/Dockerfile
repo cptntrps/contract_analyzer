@@ -28,7 +28,9 @@ RUN mkdir -p \
     output/logs \
     output/test-results \
     output/coverage \
-    output/artifacts
+    output/artifacts \
+    src/data && \
+    ln -sf /app/data/reports /app/src/data/reports
 
 # Create .env.example if it doesn't exist (for reference)
 COPY config/.env.example ./config/.env.example

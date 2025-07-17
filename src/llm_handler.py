@@ -13,6 +13,15 @@ from contextlib import contextmanager
 from .user_config_manager import user_config
 from .llm_providers import create_llm_provider
 
+# 🚀 PERFORMANCE OPTIMIZATIONS
+import hashlib
+from functools import lru_cache
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
+import queue
+import asyncio
+from concurrent.futures import ProcessPoolExecutor
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
@@ -30,7 +39,7 @@ class LLMAnalysisError(LLMError):
 
 class LLMHandler:
     """
-    Enhanced LLM Handler with robust error handling and retry logic
+    Enhanced LLM Handler with robust error handling and OPTIMIZED batch processing
     """
     
     def __init__(self):
@@ -39,7 +48,22 @@ class LLMHandler:
         self._provider_type = None
         self.max_retries = 3
         self.retry_delay = 1
-        self.timeout = 30
+        self.timeout = 15  # ⚡ Reduced timeout for faster responses
+        
+        # 🚀 BALANCED OPTIMIZATIONS (Fast but Accurate) - Define these FIRST
+        self.batch_size = 15  # Process up to 15 changes per API call
+        self.use_fast_model = True  # Use gpt-4o-mini for speed
+        self.max_workers = 5  # Parallel processing workers
+        self.cache_size = 1000  # Cache for analysis results
+        self.analysis_cache = {}  # In-memory cache for repeated analyses
+        self.cache_lock = threading.Lock()  # Thread-safe cache access
+        
+        # Balanced mode settings - keep accuracy
+        self.ultra_fast_mode = False  # Disable ultra-fast mode
+        self.max_changes_to_analyze = 150  # Reasonable limit
+        self.skip_similarity_calc = False  # Keep similarity calculation
+        
+        # NOW initialize provider (after all attributes are defined)
         self._initialize_provider()
         
         logger.info(f"LLM Handler initialized - Provider: {self._provider_type}, Model: {self.get_current_model()}")
@@ -50,6 +74,18 @@ class LLMHandler:
             # Get configuration from user config manager
             provider_config = user_config.get_llm_config()
             self._provider_type = provider_config.get('provider', 'openai')
+            
+            # 🚀 BALANCED: Use GPT-4o-mini for speed but keep quality settings
+            if self._provider_type == 'openai':
+                if self.use_fast_model:
+                    provider_config['model'] = 'gpt-4o-mini'  # Fast model
+                    provider_config['max_tokens'] = 512  # Reasonable token limit
+                    provider_config['timeout'] = 12  # Slightly faster timeout
+                    logger.info("BALANCED MODE: Using gpt-4o-mini with quality settings")
+                else:
+                    provider_config['model'] = 'gpt-4o'  # High quality model
+                    provider_config['timeout'] = self.timeout
+                    logger.info("Using high-quality model: gpt-4o")
             
             # Create provider instance
             self._provider = create_llm_provider(self._provider_type, provider_config)
@@ -617,9 +653,208 @@ RESPONSE FORMAT (respond with valid JSON only):
                 'confidence': 'low'
             }
     
-    def analyze_changes(self, changes: List[tuple]) -> List[Dict[str, Any]]:
+    def _create_optimized_batch_prompt(self, change_pairs: List[tuple]) -> str:
         """
-        Analyze multiple changes with batching and progress tracking
+        🚀 OPTIMIZATION: Create efficient batch prompt for multiple changes
+        
+        Args:
+            change_pairs: List of (deleted_text, inserted_text) tuples
+            
+        Returns:
+            str: Optimized batch prompt
+        """
+        # Build a detailed batch prompt with more context
+        changes_text = ""
+        for i, (deleted, inserted) in enumerate(change_pairs, 1):
+            changes_text += f"CHANGE {i}:\n"
+            changes_text += f"  Deleted: \"{deleted[:200]}{'...' if len(deleted) > 200 else ''}\"\n"
+            changes_text += f"  Inserted: \"{inserted[:200]}{'...' if len(inserted) > 200 else ''}\"\n\n"
+        
+        # Balanced prompt with key analysis criteria
+        prompt = f"""You are a procurement contract analysis expert. Analyze these contract changes:
+
+{changes_text}
+
+For each change, analyze:
+1. Business Impact (one sentence)
+2. Category: FINANCIAL | LEGAL_RISK | OPERATIONAL | SCOPE | COMPLIANCE | ADMINISTRATIVE
+3. Risk Level: CRITICAL | HIGH | MEDIUM | LOW | MINIMAL
+4. Financial Impact: DIRECT | INDIRECT | NONE
+5. Required Reviews: ["LEGAL_REVIEW", "FINANCE_APPROVAL", "OPS_REVIEW", "COMPLIANCE_CHECK", "SECURITY_REVIEW", "EXEC_APPROVAL"]
+
+Key Stakeholder Triggers:
+- LEGAL_REVIEW: liability, indemnification, termination, IP, disputes, insurance
+- FINANCE_APPROVAL: pricing, costs, payments, budgets, penalties, currency
+- OPS_REVIEW: service levels, deliverables, timelines, resources, performance
+- COMPLIANCE_CHECK: regulations, audits, certifications, policies
+- SECURITY_REVIEW: data access, confidentiality, system integration
+- EXEC_APPROVAL: high-value changes (>$100K), strategic relationships
+
+JSON Response Format:
+[
+  {{
+    "explanation": "Business impact summary",
+    "category": "CATEGORY",
+    "classification": "RISK_LEVEL", 
+    "financial_impact": "DIRECT|INDIRECT|NONE",
+    "required_reviews": ["STAKEHOLDER1", "STAKEHOLDER2"],
+    "procurement_flags": ["batch_processed"],
+    "confidence": "high|medium|low",
+    "review_priority": "urgent|high|normal|low"
+  }}
+]
+"""
+        return prompt
+    
+    def _parse_batch_response(self, response_text: str, change_pairs: List[tuple]) -> List[Dict[str, Any]]:
+        """
+        Parse batch response from optimized prompt
+        
+        Args:
+            response_text: Response from LLM
+            change_pairs: Original change pairs
+            
+        Returns:
+            List of analysis results
+        """
+        try:
+            # Clean and parse JSON response
+            json_text = response_text.strip()
+            if json_text.startswith('```json'):
+                json_text = json_text[7:]
+            if json_text.endswith('```'):
+                json_text = json_text[:-3]
+            json_text = json_text.strip()
+            
+            parsed_responses = json.loads(json_text)
+            
+            # Convert to our standard format
+            results = []
+            for i, response in enumerate(parsed_responses):
+                if i < len(change_pairs):
+                    deleted_text, inserted_text = change_pairs[i]
+                    
+                    # Map short response to full format
+                    stakeholder_map = {
+                        'FINANCE': 'FINANCE_APPROVAL',
+                        'LEGAL': 'LEGAL_REVIEW', 
+                        'OPS': 'OPS_REVIEW',
+                        'SECURITY': 'SECURITY_REVIEW',
+                        'COMPLIANCE': 'COMPLIANCE_CHECK',
+                        'EXEC': 'EXEC_APPROVAL'
+                    }
+                    
+                    required_reviews = []
+                    for stakeholder in response.get('stakeholders', []):
+                        mapped = stakeholder_map.get(stakeholder, stakeholder)
+                        required_reviews.append(mapped)
+                    
+                    if not required_reviews:
+                        required_reviews = ['ROUTINE']
+                    
+                    result = {
+                        'explanation': response.get('impact', 'Change detected'),
+                        'category': response.get('category', 'ADMINISTRATIVE'),
+                        'classification': response.get('risk', 'MEDIUM'),
+                        'financial_impact': 'DIRECT' if response.get('category') == 'FINANCIAL' else 'NONE',
+                        'required_reviews': required_reviews,
+                        'procurement_flags': ['batch_processed'],
+                        'review_priority': 'high' if response.get('risk') == 'CRITICAL' else 'normal',
+                        'deleted_text': deleted_text,
+                        'inserted_text': inserted_text,
+                        'confidence': 'high'
+                    }
+                    results.append(result)
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"Failed to parse batch response: {e}")
+            # Fallback to individual analysis
+            return [self._create_fallback_analysis(deleted, inserted) for deleted, inserted in change_pairs]
+    
+    def _cache_key(self, deleted_text: str, inserted_text: str) -> str:
+        """
+        🚀 CACHING: Generate cache key for analysis result
+        
+        Args:
+            deleted_text: Deleted text
+            inserted_text: Inserted text
+            
+        Returns:
+            str: Cache key
+        """
+        combined_text = f"{deleted_text}||{inserted_text}"
+        return hashlib.md5(combined_text.encode()).hexdigest()
+    
+    def _get_cached_analysis(self, deleted_text: str, inserted_text: str) -> Optional[Dict[str, Any]]:
+        """
+        🚀 CACHING: Get cached analysis result
+        
+        Args:
+            deleted_text: Deleted text
+            inserted_text: Inserted text
+            
+        Returns:
+            Optional[Dict]: Cached analysis result or None
+        """
+        cache_key = self._cache_key(deleted_text, inserted_text)
+        
+        with self.cache_lock:
+            if cache_key in self.analysis_cache:
+                logger.debug(f"✅ Cache hit for analysis: {cache_key[:8]}...")
+                return self.analysis_cache[cache_key].copy()
+        
+        return None
+    
+    def _cache_analysis(self, deleted_text: str, inserted_text: str, result: Dict[str, Any]) -> None:
+        """
+        🚀 CACHING: Cache analysis result
+        
+        Args:
+            deleted_text: Deleted text
+            inserted_text: Inserted text
+            result: Analysis result to cache
+        """
+        cache_key = self._cache_key(deleted_text, inserted_text)
+        
+        with self.cache_lock:
+            # Limit cache size to prevent memory issues
+            if len(self.analysis_cache) >= self.cache_size:
+                # Remove oldest entry (simple LRU)
+                oldest_key = next(iter(self.analysis_cache))
+                del self.analysis_cache[oldest_key]
+            
+            self.analysis_cache[cache_key] = result.copy()
+            logger.debug(f"💾 Cached analysis: {cache_key[:8]}...")
+    
+    def _analyze_single_change_with_cache(self, deleted_text: str, inserted_text: str) -> Dict[str, Any]:
+        """
+        🚀 CACHING: Analyze single change with caching
+        
+        Args:
+            deleted_text: Deleted text
+            inserted_text: Inserted text
+            
+        Returns:
+            Dict: Analysis result
+        """
+        # Check cache first
+        cached_result = self._get_cached_analysis(deleted_text, inserted_text)
+        if cached_result:
+            return cached_result
+        
+        # Perform analysis
+        result = self.get_change_analysis(deleted_text, inserted_text)
+        
+        # Cache result
+        self._cache_analysis(deleted_text, inserted_text, result)
+        
+        return result
+    
+    def analyze_changes_parallel(self, changes: List[tuple]) -> List[Dict[str, Any]]:
+        """
+        🚀 PARALLEL PROCESSING: Analyze multiple changes in parallel with caching
         
         Args:
             changes: List of change tuples [('operation', 'text'), ...]
@@ -627,7 +862,284 @@ RESPONSE FORMAT (respond with valid JSON only):
         Returns:
             List: List of analysis results
         """
-        logger.info(f"Analyzing {len(changes)} changes")
+        logger.info(f"🚀 PARALLEL ANALYZING {len(changes)} changes with caching")
+        
+        # Group changes into pairs for analysis
+        deleted_texts = []
+        inserted_texts = []
+        
+        for operation, text in changes:
+            if operation == 'delete':
+                deleted_texts.append(text)
+            elif operation == 'insert':
+                inserted_texts.append(text)
+        
+        # Create change pairs
+        max_pairs = max(len(deleted_texts), len(inserted_texts))
+        change_pairs = []
+        
+        for i in range(max_pairs):
+            deleted_text = deleted_texts[i] if i < len(deleted_texts) else ""
+            inserted_text = inserted_texts[i] if i < len(inserted_texts) else ""
+            
+            if deleted_text or inserted_text:
+                change_pairs.append((deleted_text, inserted_text))
+        
+        if not change_pairs:
+            return []
+        
+        # 🚀 PARALLEL PROCESSING: Use ThreadPoolExecutor for parallel analysis
+        all_results = []
+        cache_hits = 0
+        
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            # Submit all tasks
+            future_to_pair = {}
+            for deleted_text, inserted_text in change_pairs:
+                # Check cache first
+                cached_result = self._get_cached_analysis(deleted_text, inserted_text)
+                if cached_result:
+                    all_results.append(cached_result)
+                    cache_hits += 1
+                else:
+                    # Submit to thread pool
+                    future = executor.submit(self._analyze_single_change_with_cache, deleted_text, inserted_text)
+                    future_to_pair[future] = (deleted_text, inserted_text)
+            
+            # Collect results as they complete
+            for future in as_completed(future_to_pair):
+                try:
+                    result = future.result()
+                    all_results.append(result)
+                except Exception as e:
+                    deleted_text, inserted_text = future_to_pair[future]
+                    logger.error(f"Parallel analysis failed for change: {e}")
+                    # Use fallback analysis
+                    fallback_result = self._create_fallback_analysis(deleted_text, inserted_text)
+                    all_results.append(fallback_result)
+        
+        logger.info(f"✅ Parallel analysis complete: {len(all_results)} results processed, {cache_hits} cache hits ({cache_hits/len(change_pairs)*100:.1f}% cache hit rate)")
+        return all_results
+    
+    def analyze_changes_batch(self, changes: List[tuple]) -> List[Dict[str, Any]]:
+        """
+        🚀 OPTIMIZED: Batch analyze multiple changes with single API calls
+        
+        Args:
+            changes: List of change tuples [('operation', 'text'), ...]
+            
+        Returns:
+            List: List of analysis results
+        """
+        logger.info(f"🚀 BATCH ANALYZING {len(changes)} changes with optimization")
+        
+        # Group changes into pairs for analysis
+        deleted_texts = []
+        inserted_texts = []
+        
+        for operation, text in changes:
+            if operation == 'delete':
+                deleted_texts.append(text)
+            elif operation == 'insert':
+                inserted_texts.append(text)
+        
+        # Create change pairs
+        max_pairs = max(len(deleted_texts), len(inserted_texts))
+        change_pairs = []
+        
+        for i in range(max_pairs):
+            deleted_text = deleted_texts[i] if i < len(deleted_texts) else ""
+            inserted_text = inserted_texts[i] if i < len(inserted_texts) else ""
+            
+            if deleted_text or inserted_text:
+                change_pairs.append((deleted_text, inserted_text))
+        
+        if not change_pairs:
+            return []
+        
+        # 🚀 OPTIMIZATION: Check cache first, then batch remaining
+        all_results = []
+        uncached_pairs = []
+        cache_hits = 0
+        
+        # Check cache for all pairs
+        for deleted_text, inserted_text in change_pairs:
+            cached_result = self._get_cached_analysis(deleted_text, inserted_text)
+            if cached_result:
+                all_results.append(cached_result)
+                cache_hits += 1
+            else:
+                uncached_pairs.append((deleted_text, inserted_text))
+        
+        # Process uncached pairs in batches
+        if uncached_pairs:
+            total_batches = (len(uncached_pairs) + self.batch_size - 1) // self.batch_size
+            
+            for batch_idx in range(0, len(uncached_pairs), self.batch_size):
+                batch_pairs = uncached_pairs[batch_idx:batch_idx + self.batch_size]
+                batch_num = (batch_idx // self.batch_size) + 1
+                
+                logger.info(f"Processing batch {batch_num}/{total_batches} ({len(batch_pairs)} changes)")
+                
+                try:
+                    if self.check_connection():
+                        # Use batch processing for efficiency
+                        batch_prompt = self._create_optimized_batch_prompt(batch_pairs)
+                        response_text = self._retry_with_backoff(self._generate_with_provider, batch_prompt)
+                        batch_results = self._parse_batch_response(response_text, batch_pairs)
+                        
+                        # Cache results
+                        for i, result in enumerate(batch_results):
+                            if i < len(batch_pairs):
+                                deleted_text, inserted_text = batch_pairs[i]
+                                self._cache_analysis(deleted_text, inserted_text, result)
+                        
+                        all_results.extend(batch_results)
+                    else:
+                        # Fallback to individual analysis
+                        logger.warning("LLM not available, using fallback analysis")
+                        batch_results = [self._create_fallback_analysis(deleted, inserted) for deleted, inserted in batch_pairs]
+                        all_results.extend(batch_results)
+                    
+                except Exception as e:
+                    logger.error(f"Batch {batch_num} failed: {e}")
+                    # Fallback for this batch
+                    batch_results = [self._create_fallback_analysis(deleted, inserted) for deleted, inserted in batch_pairs]
+                    all_results.extend(batch_results)
+        
+        logger.info(f"✅ Batch analysis complete: {len(all_results)} results processed, {cache_hits} cache hits ({cache_hits/len(change_pairs)*100:.1f}% cache hit rate)")
+        return all_results
+
+    def analyze_changes_ultra_fast(self, changes: List[tuple]) -> List[Dict[str, Any]]:
+        """
+        🚀 ULTRA-FAST: Analyze changes with maximum speed optimizations
+        """
+        logger.info(f"🚀 ULTRA-FAST analyzing {len(changes)} changes")
+        
+        # Limit changes for speed
+        if len(changes) > self.max_changes_to_analyze:
+            changes = changes[:self.max_changes_to_analyze]
+            logger.info(f"⚡ Limited to {self.max_changes_to_analyze} changes for ultra-fast mode")
+        
+        # Quick grouped analysis with minimal processing
+        if len(changes) <= 10:
+            # Very small - use fast fallback
+            results = []
+            for i in range(0, len(changes), 2):
+                deleted = changes[i][1] if i < len(changes) and changes[i][0] == 'delete' else ""
+                inserted = changes[i+1][1] if i+1 < len(changes) and changes[i+1][0] == 'insert' else ""
+                results.append(self._create_ultra_fast_fallback(deleted[:200], inserted[:200]))
+            return results
+        
+        # For larger sets, use optimized batch with short prompts
+        change_pairs = []
+        deleted_texts = [c[1] for c in changes if c[0] == 'delete']
+        inserted_texts = [c[1] for c in changes if c[0] == 'insert']
+        
+        max_pairs = max(len(deleted_texts), len(inserted_texts))
+        for i in range(min(max_pairs, 25)):  # Limit to 25 pairs max
+            deleted = deleted_texts[i][:300] if i < len(deleted_texts) else ""
+            inserted = inserted_texts[i][:300] if i < len(inserted_texts) else ""
+            if deleted or inserted:
+                change_pairs.append((deleted, inserted))
+        
+        if not change_pairs:
+            return []
+        
+        # Single mega-batch for ultra speed
+        try:
+            if self.check_connection():
+                prompt = f"Contract changes analysis. JSON array only:\n"
+                for i, (d, ins) in enumerate(change_pairs[:15], 1):  # Max 15 for speed
+                    prompt += f"{i}.DEL:\"{d[:50]}\" ADD:\"{ins[:50]}\"\n"
+                prompt += 'Reply: [{"type":"ADMIN","risk":"LOW","desc":"change"}]'
+                
+                response = self._retry_with_backoff(self._generate_with_provider, prompt)
+                return self._parse_ultra_fast_response(response, change_pairs)
+            else:
+                return [self._create_ultra_fast_fallback(d, ins) for d, ins in change_pairs]
+                
+        except Exception as e:
+            logger.error(f"Ultra-fast failed: {e}")
+            return [self._create_ultra_fast_fallback(d, ins) for d, ins in change_pairs]
+    
+    def _parse_ultra_fast_response(self, response_text: str, change_pairs: List[tuple]) -> List[Dict[str, Any]]:
+        """Parse ultra-fast response quickly"""
+        try:
+            # Extract JSON quickly
+            json_text = response_text.strip()
+            start = json_text.find('[')
+            end = json_text.rfind(']') + 1
+            if start >= 0 and end > start:
+                json_text = json_text[start:end]
+            
+            parsed = json.loads(json_text)
+            results = []
+            
+            for i, resp in enumerate(parsed):
+                if i < len(change_pairs):
+                    d, ins = change_pairs[i]
+                    results.append({
+                        'explanation': resp.get('desc', 'Change detected')[:100],
+                        'category': resp.get('type', 'ADMINISTRATIVE'),
+                        'classification': resp.get('risk', 'LOW'),
+                        'financial_impact': 'NONE',
+                        'required_reviews': ['ROUTINE'],
+                        'procurement_flags': ['ultra_fast'],
+                        'review_priority': 'normal',
+                        'deleted_text': d,
+                        'inserted_text': ins,
+                        'confidence': 'medium'
+                    })
+            return results
+            
+        except:
+            return [self._create_ultra_fast_fallback(d, ins) for d, ins in change_pairs]
+    
+    def _create_ultra_fast_fallback(self, deleted_text: str, inserted_text: str) -> Dict[str, Any]:
+        """Create ultra-fast fallback analysis"""
+        return {
+            'explanation': f"Change: '{deleted_text[:30]}...' → '{inserted_text[:30]}...'",
+            'category': 'ADMINISTRATIVE',
+            'classification': 'INCONSEQUENTIAL',
+            'financial_impact': 'NONE',
+            'required_reviews': ['ROUTINE'],
+            'procurement_flags': ['ultra_fast_fallback'],
+            'review_priority': 'normal',
+            'deleted_text': deleted_text,
+            'inserted_text': inserted_text,
+            'confidence': 'medium'
+        }
+
+    def analyze_changes(self, changes: List[tuple]) -> List[Dict[str, Any]]:
+        """
+        🚀 BALANCED: Analyze multiple changes with optimal speed/accuracy balance
+        
+        Args:
+            changes: List of change tuples [('operation', 'text'), ...]
+            
+        Returns:
+            List: List of analysis results
+        """
+        # Use balanced strategy based on number of changes
+        if len(changes) <= 15:
+            # For small batches, use parallel processing for better cache utilization
+            return self.analyze_changes_parallel(changes)
+        else:
+            # For larger batches, use batch processing for API efficiency
+            return self.analyze_changes_batch(changes)
+    
+    def analyze_changes_legacy(self, changes: List[tuple]) -> List[Dict[str, Any]]:
+        """
+        LEGACY: Original individual analysis method (kept for fallback)
+        
+        Args:
+            changes: List of change tuples [('operation', 'text'), ...]
+            
+        Returns:
+            List: List of analysis results
+        """
+        logger.info(f"Analyzing {len(changes)} changes individually (legacy mode)")
         results = []
         
         # Group changes into pairs for analysis
@@ -668,6 +1180,43 @@ RESPONSE FORMAT (respond with valid JSON only):
         logger.info(f"Analysis complete: {successful_analyses}/{len(results)} high-confidence results")
         return results
     
+    def get_performance_stats(self) -> Dict[str, Any]:
+        """
+        🚀 PERFORMANCE: Get performance statistics
+        
+        Returns:
+            Dict: Performance statistics
+        """
+        with self.cache_lock:
+            cache_size = len(self.analysis_cache)
+        
+        return {
+            'cache_size': cache_size,
+            'cache_limit': self.cache_size,
+            'cache_utilization': f"{cache_size/self.cache_size*100:.1f}%",
+            'max_workers': self.max_workers,
+            'batch_size': self.batch_size,
+            'optimization_enabled': True
+        }
+    
+    def clear_cache(self) -> Dict[str, Any]:
+        """
+        🚀 PERFORMANCE: Clear analysis cache
+        
+        Returns:
+            Dict: Cache clear status
+        """
+        with self.cache_lock:
+            cache_size = len(self.analysis_cache)
+            self.analysis_cache.clear()
+        
+        logger.info(f"✅ Cache cleared: {cache_size} entries removed")
+        return {
+            'success': True,
+            'cleared_entries': cache_size,
+            'message': f"Cache cleared successfully: {cache_size} entries removed"
+        }
+    
     def get_health_status(self) -> Dict[str, Any]:
         """
         Get comprehensive health status of the LLM service
@@ -677,7 +1226,10 @@ RESPONSE FORMAT (respond with valid JSON only):
         """
         try:
             if self._ensure_provider():
-                return self._provider.get_health_status()
+                health_status = self._provider.get_health_status()
+                # Add performance stats
+                health_status['performance'] = self.get_performance_stats()
+                return health_status
             else:
                 return {
                     'connection_healthy': False,
@@ -685,7 +1237,8 @@ RESPONSE FORMAT (respond with valid JSON only):
                     'provider': self._provider_type,
                     'model': self.get_current_model(),
                     'status': 'unhealthy',
-                    'error': 'No provider available'
+                    'error': 'No provider available',
+                    'performance': self.get_performance_stats()
                 }
             
         except Exception as e:
@@ -696,7 +1249,8 @@ RESPONSE FORMAT (respond with valid JSON only):
                 'provider': self._provider_type,
                 'model': self.get_current_model(),
                 'status': 'unhealthy',
-                'error': str(e)
+                'error': str(e),
+                'performance': self.get_performance_stats()
             }
 
 # Backward compatibility functions
