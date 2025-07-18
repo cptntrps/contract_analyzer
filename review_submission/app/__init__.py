@@ -5,7 +5,7 @@ A modular contract analysis application with LLM integration,
 report generation, and web-based dashboard interface.
 """
 
-__version__ = "1.2.1"
+__version__ = "1.1.0"
 __author__ = "Contract Analyzer Team"
 
 from .main import create_app

@@ -1,15 +1,5 @@
 # Changelog
 
-## [1.2.1] - 2025-01-18
-
-### Added
-- Created review submission folder structure for code review
-- Added scripts_only subfolder with all Python files renamed for easy identification
-- Consolidated all relevant code and documentation for external review
-
-### Changed
-- Minor version bump for review submission preparation
-
 ## [1.2.0] - 2025-07-18
 
 ### 🔒 **CRITICAL SECURITY & QUALITY IMPROVEMENTS**
