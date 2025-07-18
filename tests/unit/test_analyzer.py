@@ -8,7 +8,9 @@ from docx import Document
 import tempfile
 import os
 
-from src.analyzer import ContractAnalyzer, extract_text_from_docx, compare_texts, create_commented_docx, save_analysis_metadata
+from app.core.services.analyzer import ContractAnalyzer
+from app.core.services.document_processor import DocumentProcessor
+from app.core.services.comparison_engine import ComparisonEngine
 
 
 class TestContractAnalyzer:
@@ -16,8 +18,15 @@ class TestContractAnalyzer:
 
     def test_init(self):
         """Test analyzer initialization"""
-        analyzer = ContractAnalyzer()
+        config = {
+            'llm_settings': {
+                'provider': 'openai',
+                'api_key': 'test-key'
+            }
+        }
+        analyzer = ContractAnalyzer(config)
         assert analyzer is not None
+        assert analyzer.config == config
 
     def test_extract_text_from_docx_success(self, analyzer, test_docx_file):
         """Test successful text extraction from DOCX file"""

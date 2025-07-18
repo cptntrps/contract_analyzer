@@ -13,15 +13,14 @@ import json
 # Import test utilities
 from tests import TEST_DATA_DIR, TEST_UPLOAD_DIR, TEST_REPORTS_DIR, TEST_TEMPLATES_DIR
 
-# Import application modules
-from src.config import config
-from src.dashboard_server import DashboardServer
-from src.analyzer import ContractAnalyzer
-from src.llm_handler import LLMHandler
-from src.llm_providers import OpenAIProvider
-from src.enhanced_report_generator import EnhancedReportGenerator
-from src.security import SecurityValidator
-from src.user_config_manager import UserConfigManager
+# Import application modules (updated for new architecture)
+from app.config.settings import get_config
+from app.core.services.analyzer import ContractAnalyzer
+from app.services.llm.providers.openai import OpenAIProvider
+from app.services.reports.generator import ReportGenerator
+from app.utils.security.validators import SecurityValidator
+from app.config.user_settings import UserSettingsManager
+from app import create_app
 
 @pytest.fixture(scope="session")
 def test_config():
@@ -54,12 +53,9 @@ def mock_config(test_config):
     for key, value in test_config.items():
         setattr(mock_config_obj, key.upper(), value)
     
-    # Patch only the modules that actually import config
-    with patch('src.dashboard_server.config', mock_config_obj), \
-         patch('src.config.config', mock_config_obj), \
-         patch('src.llm_handler.config', mock_config_obj), \
-         patch('src.user_config_manager.config', mock_config_obj), \
-         patch('src.security.config', mock_config_obj):
+    # Patch the new configuration system
+    with patch('app.config.settings.get_config') as mock_get_config:
+        mock_get_config.return_value = mock_config_obj
         yield mock_config_obj
 
 @pytest.fixture
@@ -147,25 +143,26 @@ def sample_analysis_result():
     }
 
 @pytest.fixture
-def mock_llm_handler():
-    """Mock LLM handler for testing"""
-    handler = Mock(spec=LLMHandler)
-    handler.get_change_analysis.return_value = {
-        'explanation': 'Test analysis result',
-        'classification': 'SIGNIFICANT',
-        'category': 'FINANCIAL',
-        'financial_impact': 'DIRECT',
-        'required_reviews': ['FINANCE_APPROVAL'],
-        'procurement_flags': ['test_flag'],
-        'review_priority': 'high',
-        'confidence': 'high'
-    }
-    handler.check_connection.return_value = True
-    handler.get_current_model.return_value = 'test-model'
-    handler.get_available_models.return_value = [
-        {'name': 'test-model', 'description': 'Test model'}
-    ]
-    return handler
+def mock_llm_provider():
+    """Mock LLM provider for testing"""
+    from app.services.llm.providers.base import BaseLLMProvider, LLMResponse
+    
+    provider = Mock(spec=BaseLLMProvider)
+    
+    # Mock the response
+    mock_response = LLMResponse(
+        content='{"explanation": "Test analysis result", "classification": "SIGNIFICANT"}',
+        usage={'total_tokens': 100},
+        model='test-model',
+        provider='test',
+        response_time=1.0
+    )
+    provider.generate_response.return_value = mock_response
+    provider.is_healthy.return_value = True
+    provider.get_available_models.return_value = ['test-model', 'test-model-2']
+    provider.model = 'test-model'
+    
+    return provider
 
 
 @pytest.fixture
@@ -223,7 +220,15 @@ def test_template_file():
 @pytest.fixture
 def analyzer():
     """Contract analyzer instance"""
-    return ContractAnalyzer()
+    config = {
+        'llm_settings': {
+            'provider': 'openai',
+            'api_key': 'test-key',
+            'model': 'gpt-4o',
+            'temperature': 0.1
+        }
+    }
+    return ContractAnalyzer(config)
 
 @pytest.fixture
 def security_validator():
@@ -233,32 +238,27 @@ def security_validator():
 @pytest.fixture
 def user_config_manager():
     """User config manager instance"""
-    return UserConfigManager()
+    return UserSettingsManager()
 
 @pytest.fixture
 def report_generator():
-    """Enhanced report generator instance"""
-    return EnhancedReportGenerator(reports_dir=str(TEST_REPORTS_DIR))
+    """Report generator instance"""
+    config = {'REPORTS_FOLDER': str(TEST_REPORTS_DIR)}
+    return ReportGenerator(reports_dir=str(TEST_REPORTS_DIR), config=config)
 
 @pytest.fixture
 def flask_app(mock_config):
     """Flask application instance for testing"""
-    with patch('src.dashboard_server.config', mock_config):
-        server = DashboardServer()
-        server.app.config['TESTING'] = True
-        yield server.app
+    with patch('app.config.settings.get_config') as mock_get_config:
+        mock_get_config.return_value = mock_config
+        app = create_app('testing')
+        app.config['TESTING'] = True
+        yield app
 
 @pytest.fixture
 def client(flask_app):
     """Flask test client"""
     return flask_app.test_client()
-
-@pytest.fixture
-def dashboard_server(mock_config):
-    """Dashboard server instance for testing"""
-    with patch('src.dashboard_server.config', mock_config):
-        server = DashboardServer()
-        yield server
 
 @pytest.fixture(autouse=True)
 def cleanup_after_test():

@@ -1,5 +1,121 @@
 # Changelog
 
+## [1.0.9] - 2025-07-18
+
+### 🔧 **CRITICAL BUG FIX**
+Fixed OpenAI model dropdown not loading in Settings tab due to duplicate JavaScript function definitions.
+
+#### **Root Cause & Solution**
+- **Issue**: Duplicate `loadTabData` and `loadSettings` functions causing execution flow interruption
+- **Impact**: Settings tab OpenAI model dropdown remained stuck on "Loading OpenAI models..."
+- **Fix**: Removed duplicate function definitions and consolidated tab loading logic
+- **Result**: OpenAI model dropdown now properly loads with all 4 available models
+
+#### **Technical Changes**
+- **JavaScript**: Merged duplicate `loadTabData` functions into single implementation
+- **JavaScript**: Removed duplicate `loadSettings` function, kept updated implementation
+- **HTML**: Rebuilt AI Model Configuration section with enhanced UI components
+- **CSS**: Added comprehensive styling for model descriptions and status indicators
+
+#### **AI Model Configuration Improvements**
+- **Model Dropdown**: Clean display with tier indicators and recommendations
+- **Model Description**: Detailed information panel with context window specs
+- **Status Display**: Real-time model and connection status indicators
+- **Refresh Button**: Manual model list refresh capability
+- **Error Handling**: Proper error messages and loading states
+
+#### **User Experience**
+- **Fixed**: Settings tab now properly initializes AI model configuration
+- **Enhanced**: Better visual feedback during model loading
+- **Improved**: Clear model descriptions and recommendations
+- **Added**: Model refresh functionality for better reliability
+
+---
+
+## [2.0.0] - 2025-07-18
+
+### 🏗️ **MAJOR ARCHITECTURAL REFACTORING**
+Complete transformation from monolithic to Domain-Driven Design (DDD) architecture with clean separation of concerns.
+
+#### **Architecture Overhaul**
+- **Domain-Driven Design**: Implemented proper domain layer with entities, value objects, and domain services
+- **Layered Architecture**: Clear separation between Domain, Application, Infrastructure, and Presentation layers
+- **Modular Design**: Replaced 800+ line monolithic files with focused, single-responsibility modules
+- **Service Pattern**: Extracted business logic into dedicated service classes
+- **Factory Pattern**: Implemented provider factory for LLM integrations
+- **Repository Pattern**: Abstracted storage concerns through service interfaces
+
+#### **New Domain Models**
+- **Contract Entity** (`app/core/models/contract.py`): Complete lifecycle management with state transitions
+- **AnalysisResult Aggregate** (`app/core/models/analysis_result.py`): Business logic for analysis data and risk calculation
+- **Change Value Object**: Individual change representation with classification and impact assessment
+
+#### **Core Services Extraction**
+- **ContractAnalyzer** (`app/core/services/analyzer.py`): Main business orchestrator
+- **DocumentProcessor** (`app/core/services/document_processor.py`): Document processing and validation
+- **ComparisonEngine** (`app/core/services/comparison_engine.py`): Text comparison and change detection algorithms
+- **FileManager** (`app/services/storage/file_manager.py`): Storage operations and file lifecycle management
+
+#### **Infrastructure Services**
+- **LLM Provider Pattern** (`app/services/llm/providers/`): Abstracted LLM integration with OpenAI implementation
+- **Report Formatters** (`app/services/reports/formatters/`): Format-specific report generation (Excel, Word, PDF)
+- **ReportGenerator** (`app/services/reports/generator.py`): Multi-format report orchestration
+
+#### **API Layer Restructure**
+- **RESTful Route Modules** (`app/api/routes/`): Focused endpoint modules with proper HTTP semantics
+  - Contract management (`contracts.py`)
+  - Analysis workflows (`analysis.py`) 
+  - Report generation (`reports.py`)
+  - Health monitoring (`health.py`)
+  - Prompt management (`prompts.py`)
+- **Middleware Layer** (`app/api/middleware/`): Request/response processing and security
+- **API Schemas** (`app/api/schemas/`): Request/response validation
+
+#### **Configuration Management**
+- **Environment-based Config** (`app/config/settings.py`): Type-safe configuration with validation
+- **Environment-specific Settings** (`app/config/environments/`): Development, production, testing configurations
+- **User Settings** (`app/config/user_settings.py`): Separated user preferences from secure configuration
+
+#### **Testing Infrastructure**
+- **Comprehensive Unit Tests**: 37+ tests covering all domain models and core services
+- **Test Architecture**: Proper fixtures, mocks, and isolation in `tests/conftest.py`
+- **Model Testing**: Full coverage for Contract, AnalysisResult, and Change models
+- **Service Testing**: Validated DocumentProcessor, ComparisonEngine, and other core services
+
+### **Migration Benefits**
+- **Maintainability**: Reduced complexity from 800+ line files to focused modules
+- **Testability**: 0 tests → 37+ comprehensive unit tests with proper coverage
+- **Extensibility**: Easy to add new LLM providers, report formats, and analysis algorithms
+- **Type Safety**: Comprehensive type hints throughout with runtime validation
+- **Performance**: Optimized service boundaries and dependency injection
+
+### **Technical Improvements**
+- **Application Factory**: Proper Flask application factory pattern with configuration injection
+- **Dependency Injection**: Loosely coupled components with interface-based design
+- **SOLID Principles**: Single responsibility, open/closed, dependency inversion throughout
+- **Error Handling**: Consistent error handling patterns across all layers
+- **Logging**: Structured JSON logging with multiple levels and proper correlation
+
+### **Quality Assurance**
+- ✅ **Zero Regression**: All functionality preserved during refactoring
+- ✅ **API Compatibility**: All 24 API endpoints functional with enhanced error handling
+- ✅ **Service Integration**: Verified integration between all new service components
+- ✅ **Health Monitoring**: Comprehensive health checks and system status reporting
+
+### **Developer Experience**
+- **Clean Architecture**: Clear boundaries and well-defined responsibilities
+- **Type Hints**: Full IDE support with comprehensive type annotations
+- **Documentation**: Extensive inline documentation and architectural guides
+- **Testing**: Fast, reliable unit tests for all critical business logic
+
+### **Breaking Changes**
+- **Import Paths**: All imports updated to new modular structure
+- **Configuration**: Environment-based configuration replaces global config
+- **Service Instantiation**: Services now use dependency injection instead of global instances
+
+### **Migration Path**
+The refactoring maintains full backward compatibility at the API level while completely restructuring the internal architecture for better maintainability and extensibility.
+
 ## [1.0.8] - 2025-07-17
 
 ### Major Changes

@@ -72,7 +72,7 @@ Based on your current installation, the following models are available:
 
 #### Get Available Models
 ```bash
-curl -s http://localhost:5000/api/available-models | jq '.'
+curl -s   http://localhost:5000/api/available-models | jq '.'
 ```
 
 #### Change Model

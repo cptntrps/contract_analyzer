@@ -181,8 +181,8 @@ function loadDashboardData() {
         fetch('/api/health').then(response => response.json())
     ]).then(([analysisResults, contracts, templates, health]) => {
         dashboardData.analysisResults = analysisResults;
-        dashboardData.contracts = contracts;
-        dashboardData.templates = templates;
+        dashboardData.contracts = contracts.contracts || [];
+        dashboardData.templates = templates.templates || [];
         dashboardData.systemStatus = health;
         
         updateDashboard();
@@ -246,18 +246,31 @@ function closeNotification(element) {
 // Tab data loading function
 function loadTabData(tabName) {
     console.log('Loading tab data for:', tabName);
+    console.log('tabName type:', typeof tabName);
+    console.log('tabName value:', JSON.stringify(tabName));
+    
     switch(tabName) {
         case 'upload':
+            console.log('Loading upload tab data...');
             updateFileListings();
             // setupFileUploads() is called once during initialization, not needed here
             break;
         case 'settings':
+            console.log('Loading settings tab data...');
             loadSettings();
             break;
+        case 'prompts':
+            console.log('Loading prompts tab data...');
+            initializePromptManagement();
+            break;
         case 'dashboard':
+            console.log('Loading dashboard tab data...');
             // Already loaded in main data refresh
             break;
+        default:
+            console.log('Unknown tab:', tabName);
     }
+    console.log('loadTabData switch completed for:', tabName);
 }
 
 function updateFileListings() {
@@ -266,18 +279,7 @@ function updateFileListings() {
     updateTemplatesList();
 }
 
-function loadSettings() {
-    console.log('Loading settings...');
-    
-    // Load available models
-    loadAvailableModels();
-    
-    // Load cache statistics
-    loadCacheStats();
-    
-    // Load other settings
-    loadSystemSettings();
-}
+// Removed duplicate function - using the updated one below
 
 function loadAvailableModels() {
     console.log('Loading available models...');
@@ -543,7 +545,9 @@ function showTab(tabName) {
     updatePageTitle(tabName);
     
     // Load tab-specific data
+    console.log('About to call loadTabData for:', tabName);
     loadTabData(tabName);
+    console.log('loadTabData call completed for:', tabName);
     
     // Update current tab
     currentTab = tabName;
@@ -746,6 +750,7 @@ function updateDashboard() {
     updateMetrics();
     updateAnalysisTable();
     updateSystemStatus();
+    updateFileListings();
 }
 
 function updateMetrics() {
@@ -841,22 +846,28 @@ function updateSystemStatus() {
 }
 
 
-function updateFileListings() {
-    updateContractsList();
-    updateTemplatesList();
-}
-
 function updateContractsList() {
+    console.log('updateContractsList called, contracts count:', dashboardData.contracts.length);
+    
     const contractsList = document.getElementById('contractsList');
+    if (!contractsList) {
+        console.error('contractsList element not found!');
+        return;
+    }
+    
     contractsList.innerHTML = '';
     
     dashboardData.contracts.forEach(contract => {
         const contractDiv = document.createElement('div');
         contractDiv.className = 'file-item';
+        
+        // Format file size
+        const fileSize = contract.file_size ? formatFileSize(contract.file_size) : 'Unknown size';
+        
         contractDiv.innerHTML = `
             <div class="file-info">
-                <div class="file-name">${contract.name}</div>
-                <div class="file-details">${contract.type} • ${contract.size}</div>
+                <div class="file-name">${contract.filename}</div>
+                <div class="file-details">Contract • ${fileSize}</div>
             </div>
             <div class="file-actions">
                 <button class="action-btn small" onclick="analyzeContract('${contract.id}')" title="Analyze Contract">
@@ -872,22 +883,33 @@ function updateContractsList() {
 }
 
 function updateTemplatesList() {
+    console.log('updateTemplatesList called, templates count:', dashboardData.templates.length);
+    
     const templatesList = document.getElementById('templatesList');
+    if (!templatesList) {
+        console.error('templatesList element not found!');
+        return;
+    }
+    
     templatesList.innerHTML = '';
     
     dashboardData.templates.forEach(template => {
         const templateDiv = document.createElement('div');
         templateDiv.className = 'file-item';
+        
+        // Format file size
+        const fileSize = template.size ? formatFileSize(template.size) : 'Unknown size';
+        
         templateDiv.innerHTML = `
             <div class="file-info">
-                <div class="file-name">${template.name}</div>
-                <div class="file-details">${template.category} • v${template.version}</div>
+                <div class="file-name">${template.display_name || template.filename}</div>
+                <div class="file-details">Template • ${fileSize}</div>
             </div>
             <div class="file-actions">
-                <button class="action-btn small" onclick="editTemplate('${template.id}')" title="Edit Template">
+                <button class="action-btn small" onclick="editTemplate('${template.filename}')" title="Edit Template">
                     <i class="fas fa-edit"></i>
                 </button>
-                <button class="action-btn small danger" onclick="deleteTemplate('${template.id}')" title="Delete Template">
+                <button class="action-btn small danger" onclick="deleteTemplate('${template.filename}')" title="Delete Template">
                     <i class="fas fa-trash"></i>
                 </button>
             </div>
@@ -914,7 +936,12 @@ function setupFileUploads() {
         contractUpload.addEventListener('dragover', handleDragOver);
         contractUpload.addEventListener('dragleave', handleDragLeave);
         contractUpload.addEventListener('drop', (e) => handleDrop(e, 'contract'));
-        contractInput.addEventListener('change', (e) => uploadFiles(e.target.files, 'contract'));
+        contractInput.addEventListener('change', (e) => {
+            // Skip if files came from drag and drop
+            if (!window.isDragDropUpload) {
+                uploadFiles(e.target.files, 'contract');
+            }
+        });
         console.log('Contract upload area setup complete');
     } else {
         console.error('Contract upload elements not found');
@@ -929,7 +956,12 @@ function setupFileUploads() {
         templateUpload.addEventListener('dragover', handleDragOver);
         templateUpload.addEventListener('dragleave', handleDragLeave);
         templateUpload.addEventListener('drop', (e) => handleDrop(e, 'template'));
-        templateInput.addEventListener('change', (e) => uploadFiles(e.target.files, 'template'));
+        templateInput.addEventListener('change', (e) => {
+            // Skip if files came from drag and drop
+            if (!window.isDragDropUpload) {
+                uploadFiles(e.target.files, 'template');
+            }
+        });
         console.log('Template upload area setup complete');
     } else {
         console.error('Template upload elements not found');
@@ -937,7 +969,12 @@ function setupFileUploads() {
     
     // Modal upload
     const modalUpload = document.getElementById('modalFileInput');
-    modalUpload.addEventListener('change', (e) => uploadFiles(e.target.files, 'contract'));
+    modalUpload.addEventListener('change', (e) => {
+        // Skip if files came from drag and drop
+        if (!window.isDragDropUpload) {
+            uploadFiles(e.target.files, 'contract');
+        }
+    });
     
     // Mark as setup complete
     fileUploadsSetup = true;
@@ -967,14 +1004,24 @@ function handleDrop(e, type) {
     // Check if files were dropped
     const files = e.dataTransfer.files;
     if (files.length > 0) {
+        // Set a flag to indicate files came from drag and drop
+        window.isDragDropUpload = true;
         uploadFiles(files, type);
+        // Reset flag after a short delay
+        setTimeout(() => {
+            window.isDragDropUpload = false;
+        }, 100);
     } else {
         showNotification('No files were dropped', 'warning');
     }
 }
 
 function uploadFiles(files, type) {
+    console.log(`uploadFiles called with ${files.length} files, type: ${type}, isDragDrop: ${window.isDragDropUpload}`);
+    
     Array.from(files).forEach(file => {
+        console.log(`Processing file: ${file.name}`);
+        
         // Validate file type
         if (!file.name.toLowerCase().endsWith('.docx')) {
             showNotification(`${file.name} is not a DOCX file. Only DOCX files are supported.`, 'error');
@@ -991,7 +1038,7 @@ function uploadFiles(files, type) {
         const formData = new FormData();
         formData.append('file', file);
         
-        const endpoint = type === 'contract' ? '/api/upload-contract' : '/api/upload-template';
+        const endpoint = type === 'contract' ? '/api/contracts/upload' : '/api/templates/upload';
         const typeLabel = type === 'contract' ? 'contract' : 'template';
         
         // Show upload progress
@@ -1310,20 +1357,13 @@ function editTemplate(templateId) {
 
 // Settings functions
 function loadSettings() {
-    // Load current settings
     console.log('Loading settings...');
     
-    // Setup provider selector
-    setupProviderSelector();
-    
-    // Load OpenAI models and configuration
-    loadOpenAIModels();
+    // Initialize AI Model Configuration
+    initializeAIModelConfiguration();
     
     // Load LLM provider information
     loadLLMProviderInfo();
-    
-    // Load current model info
-    loadModelInfo();
     
     // Load cache statistics
     loadCacheStats();
@@ -1494,6 +1534,10 @@ function formatBytes(bytes) {
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function formatFileSize(bytes) {
+    return formatBytes(bytes);
 }
 
 function refreshDashboard() {
@@ -1696,35 +1740,90 @@ let currentModel = '';
 let currentProvider = 'openai';
 let openaiModels = [];
 
-// OpenAI Model Management Functions
+// AI Model Configuration Functions
+function initializeAIModelConfiguration() {
+    console.log('Initializing AI Model Configuration...');
+    
+    // Setup event listeners
+    setupAIModelEventListeners();
+    
+    // Load OpenAI models
+    loadOpenAIModels();
+    
+    // Load current model status
+    loadCurrentModelStatus();
+}
+
+function setupAIModelEventListeners() {
+    console.log('Setting up AI Model event listeners...');
+    
+    // OpenAI model selection
+    const openaiModelSelect = document.getElementById('openaiModel');
+    if (openaiModelSelect) {
+        openaiModelSelect.addEventListener('change', handleModelChange);
+    }
+    
+    // Refresh models button
+    const refreshButton = document.getElementById('refreshModels');
+    if (refreshButton) {
+        refreshButton.addEventListener('click', refreshOpenAIModels);
+    }
+    
+    // Temperature slider
+    const temperatureSlider = document.getElementById('temperatureSlider');
+    const temperatureValue = document.getElementById('temperatureValue');
+    if (temperatureSlider && temperatureValue) {
+        temperatureSlider.addEventListener('input', function() {
+            temperatureValue.textContent = this.value;
+        });
+    }
+}
+
 function loadOpenAIModels() {
     console.log('Loading OpenAI models...');
     
+    // Show loading state
+    const modelSelect = document.getElementById('openaiModel');
+    if (modelSelect) {
+        modelSelect.innerHTML = '<option value="">Loading OpenAI models...</option>';
+    }
+    
     fetch('/api/openai-models')
-        .then(response => response.json())
+        .then(response => {
+            console.log('OpenAI models response status:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+        })
         .then(data => {
-            if (data.success) {
+            console.log('OpenAI models data received:', data);
+            if (data.success && data.models) {
                 openaiModels = data.models;
+                console.log('Updating dropdown with', data.models.length, 'models');
                 updateOpenAIModelDropdown(data.models, data.current_model);
+                
+                // Update current model status
+                updateCurrentModelStatus(data.current_model, 'Connected');
                 
                 if (data.recommendations) {
                     console.log('OpenAI model recommendations:', data.recommendations);
                 }
             } else {
-                console.error('Failed to load OpenAI models:', data.error);
-                showNotification('Failed to load OpenAI models', 'error');
+                console.error('Failed to load OpenAI models:', data.error || 'Unknown error');
+                showModelLoadError(data.error || 'Failed to load models');
             }
         })
         .catch(error => {
             console.error('Error loading OpenAI models:', error);
-            showNotification('Error loading OpenAI models', 'error');
+            showModelLoadError(error.message);
         });
 }
 
 function updateOpenAIModelDropdown(models, currentModel) {
-    const modelSelect = document.getElementById('openaiModel');
-    const modelDescription = document.getElementById('model-description');
+    console.log('Updating OpenAI model dropdown with', models.length, 'models');
     
+    const modelSelect = document.getElementById('openaiModel');
     if (!modelSelect) {
         console.error('OpenAI model select element not found');
         return;
@@ -1741,14 +1840,14 @@ function updateOpenAIModelDropdown(models, currentModel) {
     modelSelect.appendChild(defaultOption);
     
     // Add model options
-    models.forEach(model => {
+    models.forEach((model, index) => {
+        console.log(`Adding model ${index + 1}:`, model.name);
         const option = document.createElement('option');
         option.value = model.name;
-        option.textContent = `${model.name} - ${model.tier.toUpperCase()}`;
+        option.textContent = `${model.name} - ${model.tier?.toUpperCase() || 'STANDARD'}`;
         
         if (model.recommended) {
             option.textContent += ' ⭐ RECOMMENDED';
-            option.setAttribute('data-recommended', 'true');
         }
         
         if (model.name === currentModel) {
@@ -1759,19 +1858,105 @@ function updateOpenAIModelDropdown(models, currentModel) {
         modelSelect.appendChild(option);
     });
     
-    // Add change event listener
-    modelSelect.addEventListener('change', function() {
-        const selectedModel = this.value;
-        if (selectedModel) {
-            const model = openaiModels.find(m => m.name === selectedModel);
-            if (model) {
-                updateModelDescription(model);
-                changeOpenAIModel(selectedModel);
-            }
-        }
-    });
+    console.log('Dropdown updated successfully with', modelSelect.options.length, 'total options');
     
-    console.log(`Updated OpenAI model dropdown with ${models.length} models`);
+    // Update model description for current selection
+    if (currentModel) {
+        const currentModelData = models.find(m => m.name === currentModel);
+        if (currentModelData) {
+            updateModelDescription(currentModelData);
+        }
+    }
+}
+
+// Helper functions for AI Model Configuration
+function handleModelChange(event) {
+    const selectedModel = event.target.value;
+    console.log('Model changed to:', selectedModel);
+    
+    if (selectedModel) {
+        const model = openaiModels.find(m => m.name === selectedModel);
+        if (model) {
+            updateModelDescription(model);
+            changeOpenAIModel(selectedModel);
+        }
+    }
+}
+
+function refreshOpenAIModels() {
+    console.log('Refreshing OpenAI models...');
+    showNotification('Refreshing model list...', 'info');
+    loadOpenAIModels();
+}
+
+function showModelLoadError(errorMessage) {
+    console.error('Model load error:', errorMessage);
+    
+    const modelSelect = document.getElementById('openaiModel');
+    if (modelSelect) {
+        modelSelect.innerHTML = '<option value="">Error loading models</option>';
+    }
+    
+    const modelDescription = document.getElementById('model-description');
+    if (modelDescription) {
+        modelDescription.innerHTML = `<span class="error">Error: ${errorMessage}</span>`;
+    }
+    
+    showNotification('Failed to load OpenAI models', 'error');
+}
+
+function loadCurrentModelStatus() {
+    console.log('Loading current model status...');
+    
+    fetch('/api/model-info')
+        .then(response => response.json())
+        .then(data => {
+            console.log('Current model info:', data);
+            updateCurrentModelStatus(data.model || data.name, data.connection_healthy ? 'Connected' : 'Disconnected');
+        })
+        .catch(error => {
+            console.error('Error loading current model status:', error);
+            updateCurrentModelStatus('Unknown', 'Error');
+        });
+}
+
+function updateCurrentModelStatus(modelName, status) {
+    const statusModel = document.getElementById('status-model');
+    const statusConnection = document.getElementById('status-connection');
+    
+    if (statusModel) {
+        statusModel.textContent = modelName || 'Unknown';
+    }
+    
+    if (statusConnection) {
+        statusConnection.textContent = status || 'Unknown';
+        statusConnection.className = status === 'Connected' ? 'status-connected' : 'status-disconnected';
+    }
+}
+
+function changeOpenAIModel(modelName) {
+    console.log('Changing OpenAI model to:', modelName);
+    
+    fetch('/api/update-openai-model', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ model: modelName })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification(`Model changed to ${modelName}`, 'success');
+            updateCurrentModelStatus(modelName, 'Connected');
+        } else {
+            showNotification(`Failed to change model: ${data.error}`, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error changing model:', error);
+        showNotification('Error changing model', 'error');
+    });
 }
 
 function updateModelDescription(model) {
@@ -1779,17 +1964,18 @@ function updateModelDescription(model) {
     if (!modelDescription) return;
     
     modelDescription.innerHTML = `
-        <strong>${model.name}</strong><br>
-        ${model.description}<br>
-        <small>Context: ${model.context_window.toLocaleString()} tokens | Tier: ${model.tier}</small>
+        <div class="model-info">
+            <strong>${model.name}</strong>
+            <span class="model-tier">${model.tier?.toUpperCase() || 'STANDARD'}</span>
+            ${model.recommended ? '<span class="recommended">⭐ RECOMMENDED</span>' : ''}
+        </div>
+        <div class="model-description-text">
+            ${model.description || 'No description available'}
+        </div>
+        <div class="model-specs">
+            <span>Context: ${model.context_window?.toLocaleString() || 'N/A'} tokens</span>
+        </div>
     `;
-    
-    // Add recommended styling
-    if (model.recommended) {
-        modelDescription.classList.add('recommended');
-    } else {
-        modelDescription.classList.remove('recommended');
-    }
 }
 
 function changeOpenAIModel(modelName) {
@@ -2116,4 +2302,529 @@ function testTabs() {
     
     console.log('\n=== Test completed ===');
     return 'Tab test completed - check console output';
-} 
+}
+
+// ==================== PROMPT MANAGEMENT FUNCTIONS ====================
+
+// Global variables for prompt management
+let currentPromptType = 'individual_analysis';
+let originalPromptContent = '';
+let promptBackups = [];
+
+// Initialize prompt management when prompts tab is loaded
+// Removed duplicate function - using the main one above
+
+function initializePromptManagement() {
+    console.log('Initializing prompt management...');
+    
+    // Setup event listeners
+    setupPromptEventListeners();
+    
+    // Load initial prompt
+    loadPrompts();
+    
+    // Load backup list
+    loadBackupList();
+    
+    // Load prompt statistics
+    loadPromptStats();
+}
+
+function setupPromptEventListeners() {
+    // Prompt type selector
+    const promptTypeSelect = document.getElementById('promptTypeSelect');
+    if (promptTypeSelect) {
+        promptTypeSelect.addEventListener('change', onPromptTypeChange);
+    }
+    
+    // Variable tag insertion
+    const variableTags = document.querySelectorAll('.variable-tag');
+    variableTags.forEach(tag => {
+        tag.addEventListener('click', insertVariableAtCursor);
+    });
+    
+    // Backup selector
+    const backupList = document.getElementById('backupList');
+    if (backupList) {
+        backupList.addEventListener('change', onBackupSelectionChange);
+    }
+}
+
+function onPromptTypeChange() {
+    const promptTypeSelect = document.getElementById('promptTypeSelect');
+    currentPromptType = promptTypeSelect.value;
+    
+    // Load the selected prompt type
+    loadPrompts();
+}
+
+function loadPrompts() {
+    console.log(`Loading prompt for type: ${currentPromptType}`);
+    
+    fetch(`/api/prompts/${currentPromptType}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                showNotification(data.error, 'error');
+                return;
+            }
+            
+            const promptEditor = document.getElementById('promptEditor');
+            if (promptEditor) {
+                promptEditor.value = data.template || '';
+                originalPromptContent = data.template || '';
+            }
+            
+            // Update prompt info
+            updatePromptInfo(data);
+            
+            console.log('Prompt loaded successfully');
+        })
+        .catch(error => {
+            console.error('Error loading prompt:', error);
+            showNotification('Failed to load prompt template', 'error');
+        });
+}
+
+function updatePromptInfo(data) {
+    const versionElement = document.getElementById('prompt-version');
+    const statusElement = document.getElementById('prompt-status');
+    
+    if (versionElement) {
+        versionElement.textContent = `Version: ${data.version || '1.0'}`;
+    }
+    
+    if (statusElement) {
+        statusElement.textContent = `Status: ${data.status || 'Active'}`;
+    }
+}
+
+function savePrompt() {
+    const promptEditor = document.getElementById('promptEditor');
+    if (!promptEditor) {
+        showNotification('Prompt editor not found', 'error');
+        return;
+    }
+    
+    const newContent = promptEditor.value.trim();
+    if (!newContent) {
+        showNotification('Prompt cannot be empty', 'error');
+        return;
+    }
+    
+    // Show saving notification
+    showNotification('Saving prompt...', 'info');
+    
+    fetch(`/api/prompts/${currentPromptType}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            template: newContent
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            showNotification(data.error, 'error');
+            return;
+        }
+        
+        showNotification('Prompt saved successfully!', 'success');
+        originalPromptContent = newContent;
+        
+        // Update prompt info
+        updatePromptInfo(data);
+        
+        // Refresh statistics
+        loadPromptStats();
+    })
+    .catch(error => {
+        console.error('Error saving prompt:', error);
+        showNotification('Failed to save prompt', 'error');
+    });
+}
+
+function validatePrompt() {
+    const promptEditor = document.getElementById('promptEditor');
+    if (!promptEditor) {
+        showNotification('Prompt editor not found', 'error');
+        return;
+    }
+    
+    const content = promptEditor.value.trim();
+    if (!content) {
+        showValidationResult('Prompt cannot be empty', false);
+        return;
+    }
+    
+    // Show validating notification
+    showNotification('Validating prompt...', 'info');
+    
+    fetch(`/api/prompts/validate`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            template: content,
+            prompt_type: currentPromptType
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            showValidationResult(data.error, false);
+            return;
+        }
+        
+        showValidationResult(data.message || 'Prompt is valid!', data.valid);
+        
+        if (data.suggestions && data.suggestions.length > 0) {
+            showValidationSuggestions(data.suggestions);
+        }
+    })
+    .catch(error => {
+        console.error('Error validating prompt:', error);
+        showValidationResult('Validation failed: ' + error.message, false);
+    });
+}
+
+function showValidationResult(message, isValid) {
+    const validationResults = document.getElementById('validationResults');
+    if (!validationResults) return;
+    
+    const icon = isValid ? '<i class="fas fa-check-circle" style="color: green;"></i>' : 
+                          '<i class="fas fa-times-circle" style="color: red;"></i>';
+    
+    validationResults.innerHTML = `
+        <div class="validation-message ${isValid ? 'valid' : 'invalid'}">
+            ${icon} ${message}
+        </div>
+    `;
+}
+
+function showValidationSuggestions(suggestions) {
+    const validationResults = document.getElementById('validationResults');
+    if (!validationResults) return;
+    
+    const suggestionsList = suggestions.map(s => `<li>${s}</li>`).join('');
+    validationResults.innerHTML += `
+        <div class="validation-suggestions">
+            <h4>Suggestions:</h4>
+            <ul>${suggestionsList}</ul>
+        </div>
+    `;
+}
+
+function previewPrompt() {
+    const promptEditor = document.getElementById('promptEditor');
+    if (!promptEditor) {
+        showNotification('Prompt editor not found', 'error');
+        return;
+    }
+    
+    const content = promptEditor.value.trim();
+    if (!content) {
+        showNotification('Prompt cannot be empty', 'error');
+        return;
+    }
+    
+    // Show preview loading
+    const previewPanel = document.getElementById('promptPreview');
+    if (previewPanel) {
+        previewPanel.innerHTML = '<p class="preview-message">Generating preview...</p>';
+    }
+    
+    fetch(`/api/prompts/preview`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            template: content,
+            prompt_type: currentPromptType
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            showPreviewResult('Preview failed: ' + data.error, false);
+            return;
+        }
+        
+        showPreviewResult(data.preview_text, true);
+    })
+    .catch(error => {
+        console.error('Error generating preview:', error);
+        showPreviewResult('Preview failed: ' + error.message, false);
+    });
+}
+
+function showPreviewResult(content, isSuccess) {
+    const previewPanel = document.getElementById('promptPreview');
+    if (!previewPanel) return;
+    
+    if (isSuccess) {
+        previewPanel.innerHTML = `
+            <div class="preview-content-success">
+                <pre>${content}</pre>
+            </div>
+        `;
+    } else {
+        previewPanel.innerHTML = `
+            <div class="preview-content-error">
+                <p style="color: red;">${content}</p>
+            </div>
+        `;
+    }
+}
+
+function resetPrompt() {
+    const promptEditor = document.getElementById('promptEditor');
+    if (!promptEditor) {
+        showNotification('Prompt editor not found', 'error');
+        return;
+    }
+    
+    if (confirm('Are you sure you want to reset the prompt to its original state? Any unsaved changes will be lost.')) {
+        promptEditor.value = originalPromptContent;
+        showNotification('Prompt reset to original state', 'info');
+        
+        // Clear validation and preview
+        clearValidationAndPreview();
+    }
+}
+
+function clearValidationAndPreview() {
+    const validationResults = document.getElementById('validationResults');
+    const previewPanel = document.getElementById('promptPreview');
+    
+    if (validationResults) {
+        validationResults.innerHTML = '<p class="validation-message">Click "Validate" to check your prompt</p>';
+    }
+    
+    if (previewPanel) {
+        previewPanel.innerHTML = '<p class="preview-message">Click "Preview" to see prompt with sample data</p>';
+    }
+}
+
+function insertVariableAtCursor(event) {
+    const promptEditor = document.getElementById('promptEditor');
+    const variable = event.target.textContent;
+    
+    if (!promptEditor) return;
+    
+    const cursorPos = promptEditor.selectionStart;
+    const textBefore = promptEditor.value.substring(0, cursorPos);
+    const textAfter = promptEditor.value.substring(promptEditor.selectionEnd);
+    
+    promptEditor.value = textBefore + variable + textAfter;
+    promptEditor.selectionStart = promptEditor.selectionEnd = cursorPos + variable.length;
+    promptEditor.focus();
+    
+    showNotification(`Inserted variable: ${variable}`, 'info');
+}
+
+function createBackup() {
+    const promptEditor = document.getElementById('promptEditor');
+    const backupNameInput = document.getElementById('backupName');
+    
+    if (!promptEditor) {
+        showNotification('Prompt editor not found', 'error');
+        return;
+    }
+    
+    const content = promptEditor.value.trim();
+    if (!content) {
+        showNotification('Cannot backup empty prompt', 'error');
+        return;
+    }
+    
+    const backupName = backupNameInput ? backupNameInput.value.trim() : '';
+    
+    showNotification('Creating backup...', 'info');
+    
+    fetch(`/api/prompts/backup`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            prompt_type: currentPromptType,
+            template: content,
+            backup_name: backupName
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            showNotification(data.error, 'error');
+            return;
+        }
+        
+        showNotification('Backup created successfully!', 'success');
+        
+        // Clear backup name input
+        if (backupNameInput) {
+            backupNameInput.value = '';
+        }
+        
+        // Refresh backup list
+        loadBackupList();
+        
+        // Refresh statistics
+        loadPromptStats();
+    })
+    .catch(error => {
+        console.error('Error creating backup:', error);
+        showNotification('Failed to create backup', 'error');
+    });
+}
+
+function loadBackupList() {
+    fetch(`/api/prompts/backups/${currentPromptType}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                console.error('Error loading backups:', data.error);
+                return;
+            }
+            
+            updateBackupList(data.backups || []);
+        })
+        .catch(error => {
+            console.error('Error loading backup list:', error);
+        });
+}
+
+function updateBackupList(backups) {
+    const backupSelector = document.getElementById('backupList');
+    const backupContainer = document.getElementById('backupListContainer');
+    
+    if (backupSelector) {
+        backupSelector.innerHTML = '<option value="">Select backup to restore...</option>';
+        
+        backups.forEach(backup => {
+            const option = document.createElement('option');
+            option.value = backup.id;
+            option.textContent = `${backup.name} (${formatDate(backup.created_at)})`;
+            backupSelector.appendChild(option);
+        });
+    }
+    
+    if (backupContainer) {
+        if (backups.length === 0) {
+            backupContainer.innerHTML = '<p class="backup-message">No backups available</p>';
+        } else {
+            const backupItems = backups.map(backup => `
+                <div class="backup-item">
+                    <span class="backup-name">${backup.name}</span>
+                    <span class="backup-date">${formatDate(backup.created_at)}</span>
+                    <button class="action-btn small" onclick="restoreSpecificBackup('${backup.id}')">
+                        <i class="fas fa-download"></i> Restore
+                    </button>
+                </div>
+            `).join('');
+            
+            backupContainer.innerHTML = backupItems;
+        }
+    }
+}
+
+function onBackupSelectionChange() {
+    // Implementation for when backup selection changes
+    // Could show backup preview or details
+}
+
+function restoreBackup() {
+    const backupSelector = document.getElementById('backupList');
+    if (!backupSelector || !backupSelector.value) {
+        showNotification('Please select a backup to restore', 'warning');
+        return;
+    }
+    
+    restoreSpecificBackup(backupSelector.value);
+}
+
+function restoreSpecificBackup(backupId) {
+    if (!confirm('Are you sure you want to restore this backup? Current prompt will be overwritten.')) {
+        return;
+    }
+    
+    showNotification('Restoring backup...', 'info');
+    
+    fetch(`/api/prompts/restore/${backupId}`, {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            showNotification(data.error, 'error');
+            return;
+        }
+        
+        showNotification('Backup restored successfully!', 'success');
+        
+        // Reload the current prompt
+        loadPrompts();
+        
+        // Clear validation and preview
+        clearValidationAndPreview();
+    })
+    .catch(error => {
+        console.error('Error restoring backup:', error);
+        showNotification('Failed to restore backup', 'error');
+    });
+}
+
+function loadPromptStats() {
+    fetch('/api/prompts/stats')
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                console.error('Error loading prompt stats:', data.error);
+                return;
+            }
+            
+            updatePromptStats(data);
+        })
+        .catch(error => {
+            console.error('Error loading prompt stats:', error);
+        });
+}
+
+function updatePromptStats(stats) {
+    const elements = {
+        'totalPrompts': stats.total_prompts || 0,
+        'activePrompts': stats.active_prompts || 0,
+        'totalBackups': stats.total_backups || 0,
+        'lastModified': stats.last_modified ? formatDate(stats.last_modified) : 'Never'
+    };
+    
+    Object.entries(elements).forEach(([id, value]) => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.textContent = value;
+        }
+    });
+}
+
+// Update the page title mapping to include prompts
+function updatePageTitle(tab) {
+    const pageTitle = document.getElementById('pageTitle');
+    const titles = {
+        'dashboard': 'Contract Review Dashboard',
+        'upload': 'File Upload & Management',
+        'prompts': 'LLM Prompt Management',
+        'settings': 'System Configuration'
+    };
+    
+    if (pageTitle) {
+        pageTitle.textContent = titles[tab] || 'Contract Review Dashboard';
+        console.log('Updated page title to:', titles[tab] || 'Contract Review Dashboard');
+    } else {
+        console.error('Page title element not found');
+    }
+}

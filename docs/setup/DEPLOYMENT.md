@@ -1,5 +1,16 @@
 # Contract Analyzer Deployment Guide
 
+This guide covers deployment of the **refactored Contract Analyzer** with its new modular architecture. The application is now fully containerized and production-ready.
+
+## 🏗️ Architecture Overview
+
+The refactored application uses:
+- **Flask Application Factory** pattern
+- **Domain-Driven Design** architecture
+- **Environment-based configuration**
+- **RESTful API** endpoints
+- **Comprehensive health checks**
+
 ## 🚀 Quick Deployment Options
 
 ### Option 1: Render (Recommended - Free)
@@ -33,8 +44,24 @@ git push heroku main
 
 **Local Docker:**
 ```bash
+# Build the image
 docker build -t contract-analyzer .
-docker run -p 8080:8080 -e OPENAI_API_KEY=your-key contract-analyzer
+
+# Run with environment variables
+docker run -p 5000:5000 \
+  -e OPENAI_API_KEY=your-key \
+  -e FLASK_ENV=production \
+  -e DEBUG=false \
+  contract-analyzer
+```
+
+**Docker Compose (Development):**
+```bash
+# Start the full development stack
+docker-compose up --build
+
+# Access the application
+open http://localhost:5000
 ```
 
 **Google Cloud Run:**
@@ -57,19 +84,45 @@ docker push YOUR-ECR-URI/contract-analyzer:latest
 
 ## 🔧 Environment Variables
 
-Required for all deployments:
-```
-FLASK_HOST=0.0.0.0
-FLASK_PORT=8080 (or platform-specific)
-OPENAI_API_KEY=your-openai-api-key
-LLM_PROVIDER=openai
+### Required for all deployments:
+```bash
+OPENAI_API_KEY=your-openai-api-key     # Required for AI analysis
+FLASK_ENV=production                    # Environment setting
+DEBUG=false                            # Disable debug mode in production
 ```
 
-Optional:
+### Optional configuration:
+```bash
+# Application settings
+FLASK_HOST=0.0.0.0                     # Host binding (default: 127.0.0.1)
+FLASK_PORT=5000                        # Port (default: 5000)
+LOG_LEVEL=INFO                         # Logging level (DEBUG, INFO, WARNING, ERROR)
+
+# LLM configuration
+LLM_PROVIDER=openai                    # LLM provider (default: openai)
+OPENAI_MODEL=gpt-4o                    # OpenAI model (default: gpt-4o)
+LLM_TEMPERATURE=0.1                    # Temperature setting (default: 0.1)
+LLM_MAX_TOKENS=512                     # Max tokens (default: 512)
+LLM_TIMEOUT=30                         # Request timeout (default: 30)
+
+# File handling
+MAX_CONTENT_LENGTH=52428800            # Max file size in bytes (default: 50MB)
+ALLOWED_EXTENSIONS=docx,doc            # Allowed file extensions
+
+# Storage paths (for custom deployment)
+UPLOAD_FOLDER=data/uploads             # Upload directory
+TEMPLATES_FOLDER=data/templates        # Templates directory
+REPORTS_FOLDER=data/reports            # Reports directory
 ```
-DEBUG=false
-FLASK_ENV=production
-MAX_CONTENT_LENGTH=16777216
+
+### Platform-specific variables:
+```bash
+# For Render, Railway, Heroku (they set PORT automatically)
+PORT=5000                              # Platform-assigned port
+
+# For Google Cloud Run
+FLASK_HOST=0.0.0.0                     # Required for GCR
+PORT=8080                              # GCR default port
 ```
 
 ## 📝 Pre-deployment Checklist
