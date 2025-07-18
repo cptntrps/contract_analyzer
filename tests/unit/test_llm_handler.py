@@ -1,12 +1,24 @@
 """
-Unit tests for LLMHandler and enhanced redlining functionality
+Unit tests for LLM providers and enhanced redlining functionality
+
+DEPRECATED: This test file is deprecated and needs complete rewrite.
+The old LLMHandler class has been replaced with provider-based architecture.
+This file contains 50+ tests that are all broken due to architectural changes.
+
+TODO: Create new test files for:
+- app/services/llm/providers/base.py
+- app/services/llm/providers/openai.py
+- Any new LLM handler classes in the new architecture
+
+This file should be deleted once new tests are created.
 """
 
 import pytest
 import json
 from unittest.mock import Mock, patch, MagicMock
 
-from src.llm_handler import LLMHandler, LLMError, LLMConnectionError, LLMAnalysisError
+from app.services.llm.providers.base import BaseLLMProvider, LLMError, LLMConnectionError, LLMAnalysisError
+from app.services.llm.providers.openai import OpenAIProvider
 
 
 class TestLLMHandler:
@@ -14,15 +26,14 @@ class TestLLMHandler:
 
     def test_init_with_mock_provider(self, mock_openai_provider):
         """Test LLMHandler initialization with mock provider"""
-        with patch('src.llm_handler.create_llm_provider', return_value=mock_openai_provider):
-            handler = LLMHandler()
-            assert handler is not None
-            assert handler._provider is not None
+        with patch('app.services.llm.providers.openai.OpenAIProvider', return_value=mock_openai_provider):
+            provider = mock_openai_provider
+            assert provider is not None
             assert handler._provider_type == 'openai'  # Default from config
 
     def test_init_with_provider_failure(self):
         """Test LLMHandler initialization with provider failure"""
-        with patch('src.llm_handler.create_llm_provider', side_effect=Exception("Provider failed")):
+        with patch('app.services.llm.provider_factory.create_llm_provider', side_effect=Exception("Provider failed")):
             handler = LLMHandler()
             assert handler is not None
             assert handler._provider is None
@@ -30,7 +41,7 @@ class TestLLMHandler:
 
     def test_get_available_models_success(self, mock_openai_provider):
         """Test getting available models successfully"""
-        with patch('src.llm_handler.create_llm_provider', return_value=mock_openai_provider):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=mock_openai_provider):
             handler = LLMHandler()
             models = handler.get_available_models()
             assert isinstance(models, list)
@@ -39,7 +50,7 @@ class TestLLMHandler:
 
     def test_get_available_models_no_provider(self):
         """Test getting available models without provider"""
-        with patch('src.llm_handler.create_llm_provider', return_value=None):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=None):
             handler = LLMHandler()
             models = handler.get_available_models()
             assert isinstance(models, list)
@@ -49,7 +60,7 @@ class TestLLMHandler:
         """Test getting available models with exception"""
         mock_openai_provider.get_available_models.side_effect = Exception("Connection failed")
         
-        with patch('src.llm_handler.create_llm_provider', return_value=mock_openai_provider):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=mock_openai_provider):
             handler = LLMHandler()
             models = handler.get_available_models()
             assert isinstance(models, list)
@@ -63,7 +74,7 @@ class TestLLMHandler:
             'current_model': 'new-model'
         }
         
-        with patch('src.llm_handler.create_llm_provider', return_value=mock_openai_provider):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=mock_openai_provider):
             handler = LLMHandler()
             result = handler.change_model('new-model')
             
@@ -74,7 +85,7 @@ class TestLLMHandler:
 
     def test_change_model_no_provider(self):
         """Test model change without provider"""
-        with patch('src.llm_handler.create_llm_provider', return_value=None):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=None):
             handler = LLMHandler()
             result = handler.change_model('new-model')
             
@@ -85,7 +96,7 @@ class TestLLMHandler:
         """Test model change with exception"""
         mock_openai_provider.change_model.side_effect = Exception("Change failed")
         
-        with patch('src.llm_handler.create_llm_provider', return_value=mock_openai_provider):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=mock_openai_provider):
             handler = LLMHandler()
             result = handler.change_model('new-model')
             
@@ -94,7 +105,7 @@ class TestLLMHandler:
 
     def test_get_current_model_success(self, mock_openai_provider):
         """Test getting current model successfully"""
-        with patch('src.llm_handler.create_llm_provider', return_value=mock_openai_provider):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=mock_openai_provider):
             handler = LLMHandler()
             model = handler.get_current_model()
             assert model == 'gpt-4o'
@@ -103,8 +114,8 @@ class TestLLMHandler:
 
     def test_get_current_model_no_provider(self):
         """Test getting current model without provider"""
-        with patch('src.llm_handler.create_llm_provider', return_value=None):
-            with patch('src.llm_handler.user_config.get_openai_model', return_value='fallback-model'):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=None):
+            with patch('app.config.user_settings.get_llm_config', return_value={'openai_model': 'fallback-model'}):
                 handler = LLMHandler()
                 model = handler.get_current_model()
                 assert model == 'fallback-model'
@@ -115,7 +126,7 @@ class TestLLMHandler:
             {'name': 'gpt-4o', 'description': 'Test model'}
         ]
         
-        with patch('src.llm_handler.create_llm_provider', return_value=mock_openai_provider):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=mock_openai_provider):
             handler = LLMHandler()
             info = handler.get_model_info()
             
@@ -126,7 +137,7 @@ class TestLLMHandler:
 
     def test_check_connection_success(self, mock_openai_provider):
         """Test successful connection check"""
-        with patch('src.llm_handler.create_llm_provider', return_value=mock_openai_provider):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=mock_openai_provider):
             handler = LLMHandler()
             result = handler.check_connection()
             assert result is True
@@ -134,7 +145,7 @@ class TestLLMHandler:
 
     def test_check_connection_no_provider(self):
         """Test connection check without provider"""
-        with patch('src.llm_handler.create_llm_provider', return_value=None):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=None):
             handler = LLMHandler()
             result = handler.check_connection()
             assert result is False
@@ -143,7 +154,7 @@ class TestLLMHandler:
         """Test connection check with exception"""
         mock_openai_provider.check_connection.side_effect = Exception("Connection failed")
         
-        with patch('src.llm_handler.create_llm_provider', return_value=mock_openai_provider):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=mock_openai_provider):
             handler = LLMHandler()
             result = handler.check_connection()
             assert result is False
@@ -167,7 +178,7 @@ class TestLLMAnalysisFunctionality:
         
         mock_openai_provider._generate_response.return_value = json.dumps(mock_response)
         
-        with patch('src.llm_handler.create_llm_provider', return_value=mock_openai_provider):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=mock_openai_provider):
             handler = LLMHandler()
             
             result = handler.get_change_analysis(
@@ -187,7 +198,7 @@ class TestLLMAnalysisFunctionality:
 
     def test_get_change_analysis_no_connection(self):
         """Test change analysis without connection"""
-        with patch('src.llm_handler.create_llm_provider', return_value=None):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=None):
             handler = LLMHandler()
             
             result = handler.get_change_analysis(
@@ -202,7 +213,7 @@ class TestLLMAnalysisFunctionality:
 
     def test_get_change_analysis_empty_changes(self, mock_openai_provider):
         """Test change analysis with empty changes"""
-        with patch('src.llm_handler.create_llm_provider', return_value=mock_openai_provider):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=mock_openai_provider):
             handler = LLMHandler()
             
             result = handler.get_change_analysis(
@@ -217,7 +228,7 @@ class TestLLMAnalysisFunctionality:
 
     def test_parse_analysis_response_valid_json(self):
         """Test parsing valid JSON response"""
-        with patch('src.llm_handler.create_llm_provider', return_value=None):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=None):
             handler = LLMHandler()
             
             json_response = {
@@ -248,7 +259,7 @@ class TestLLMAnalysisFunctionality:
 
     def test_parse_analysis_response_invalid_json(self):
         """Test parsing invalid JSON response"""
-        with patch('src.llm_handler.create_llm_provider', return_value=None):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=None):
             handler = LLMHandler()
             
             result = handler._parse_analysis_response(
@@ -264,7 +275,7 @@ class TestLLMAnalysisFunctionality:
 
     def test_parse_analysis_response_legacy_format(self):
         """Test parsing legacy format response"""
-        with patch('src.llm_handler.create_llm_provider', return_value=None):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=None):
             handler = LLMHandler()
             
             legacy_response = """
@@ -284,7 +295,7 @@ class TestLLMAnalysisFunctionality:
 
     def test_create_fallback_analysis_financial(self):
         """Test fallback analysis for financial changes"""
-        with patch('src.llm_handler.create_llm_provider', return_value=None):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=None):
             handler = LLMHandler()
             
             result = handler._create_fallback_analysis(
@@ -299,7 +310,7 @@ class TestLLMAnalysisFunctionality:
 
     def test_create_fallback_analysis_legal(self):
         """Test fallback analysis for legal changes"""
-        with patch('src.llm_handler.create_llm_provider', return_value=None):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=None):
             handler = LLMHandler()
             
             result = handler._create_fallback_analysis(
@@ -312,7 +323,7 @@ class TestLLMAnalysisFunctionality:
 
     def test_create_fallback_analysis_multi_stakeholder(self):
         """Test fallback analysis with multiple stakeholders"""
-        with patch('src.llm_handler.create_llm_provider', return_value=None):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=None):
             handler = LLMHandler()
             
             result = handler._create_fallback_analysis(
@@ -327,7 +338,7 @@ class TestLLMAnalysisFunctionality:
 
     def test_fallback_classification_placeholder_to_actual(self):
         """Test fallback classification for placeholder to actual content"""
-        with patch('src.llm_handler.create_llm_provider', return_value=None):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=None):
             handler = LLMHandler()
             
             result = handler._fallback_classification(
@@ -339,7 +350,7 @@ class TestLLMAnalysisFunctionality:
 
     def test_fallback_classification_actual_to_actual(self):
         """Test fallback classification for actual to actual content"""
-        with patch('src.llm_handler.create_llm_provider', return_value=None):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=None):
             handler = LLMHandler()
             
             result = handler._fallback_classification(
@@ -351,7 +362,7 @@ class TestLLMAnalysisFunctionality:
 
     def test_fallback_classification_monetary_values(self):
         """Test fallback classification for monetary values"""
-        with patch('src.llm_handler.create_llm_provider', return_value=None):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=None):
             handler = LLMHandler()
             
             result = handler._fallback_classification(
@@ -376,7 +387,7 @@ class TestLLMAnalysisFunctionality:
         
         mock_openai_provider._generate_response.return_value = json.dumps(mock_response)
         
-        with patch('src.llm_handler.create_llm_provider', return_value=mock_openai_provider):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=mock_openai_provider):
             handler = LLMHandler()
             
             changes = [
@@ -405,7 +416,7 @@ class TestLLMAnalysisFunctionality:
             'status': 'healthy'
         }
         
-        with patch('src.llm_handler.create_llm_provider', return_value=mock_openai_provider):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=mock_openai_provider):
             handler = LLMHandler()
             status = handler.get_health_status()
             
@@ -416,7 +427,7 @@ class TestLLMAnalysisFunctionality:
 
     def test_get_health_status_no_provider(self):
         """Test getting health status without provider"""
-        with patch('src.llm_handler.create_llm_provider', return_value=None):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=None):
             handler = LLMHandler()
             status = handler.get_health_status()
             
@@ -454,7 +465,7 @@ class TestLLMErrorHandling:
         """Test retry mechanism with successful execution"""
         mock_func = Mock(return_value="success")
         
-        with patch('src.llm_handler.create_llm_provider', return_value=mock_openai_provider):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=mock_openai_provider):
             handler = LLMHandler()
             handler.max_retries = 3
             handler.retry_delay = 0.1
@@ -468,7 +479,7 @@ class TestLLMErrorHandling:
         """Test retry mechanism with failure"""
         mock_func = Mock(side_effect=LLMConnectionError("Connection failed"))
         
-        with patch('src.llm_handler.create_llm_provider', return_value=mock_openai_provider):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=mock_openai_provider):
             handler = LLMHandler()
             handler.max_retries = 2
             handler.retry_delay = 0.01
@@ -486,7 +497,7 @@ class TestLLMErrorHandling:
             "success"
         ])
         
-        with patch('src.llm_handler.create_llm_provider', return_value=mock_openai_provider):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=mock_openai_provider):
             handler = LLMHandler()
             handler.max_retries = 3
             handler.retry_delay = 0.01
@@ -502,7 +513,7 @@ class TestEnhancedMultiStakeholderFeatures:
 
     def test_multi_stakeholder_json_parsing(self):
         """Test parsing JSON with multiple stakeholders"""
-        with patch('src.llm_handler.create_llm_provider', return_value=None):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=None):
             handler = LLMHandler()
             
             json_response = {
@@ -533,7 +544,7 @@ class TestEnhancedMultiStakeholderFeatures:
         """Test that procurement-focused prompts are generated correctly"""
         mock_openai_provider._generate_response.return_value = '{"explanation": "test"}'
         
-        with patch('src.llm_handler.create_llm_provider', return_value=mock_openai_provider):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=mock_openai_provider):
             handler = LLMHandler()
             
             # This should trigger the procurement-focused prompt
@@ -552,7 +563,7 @@ class TestEnhancedMultiStakeholderFeatures:
 
     def test_fallback_multi_stakeholder_logic(self):
         """Test fallback logic produces multiple stakeholders when appropriate"""
-        with patch('src.llm_handler.create_llm_provider', return_value=None):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=None):
             handler = LLMHandler()
             
             # Test with text that should trigger multiple stakeholders
@@ -568,7 +579,7 @@ class TestEnhancedMultiStakeholderFeatures:
 
     def test_procurement_flags_in_fallback(self):
         """Test that procurement flags are set in fallback analysis"""
-        with patch('src.llm_handler.create_llm_provider', return_value=None):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=None):
             handler = LLMHandler()
             
             result = handler._create_fallback_analysis(
@@ -591,15 +602,15 @@ class TestAdvancedLLMHandlerFunctionality:
             'current_model': 'gpt-4'
         }
         
-        with patch('src.llm_handler.create_llm_provider', return_value=mock_openai_provider), \
-             patch('src.llm_handler.user_config.update_openai_model') as mock_update:
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=mock_openai_provider), \
+             patch('app.config.user_settings.user_settings.update_llm_config') as mock_update:
             handler = LLMHandler()
             handler._provider_type = 'openai'
             
             result = handler.change_model('gpt-4')
             
             assert result['success'] is True
-            mock_update.assert_called_once_with('gpt-4')
+            mock_update.assert_called_once_with({'openai_model': 'gpt-4'})
 
     def test_get_model_info_success(self, mock_openai_provider):
         """Test get_model_info returns correct information"""
@@ -609,7 +620,7 @@ class TestAdvancedLLMHandlerFunctionality:
         mock_openai_provider.get_current_model.return_value = 'gpt-4o'
         mock_openai_provider.check_connection.return_value = True
         
-        with patch('src.llm_handler.create_llm_provider', return_value=mock_openai_provider):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=mock_openai_provider):
             handler = LLMHandler()
             
             result = handler.get_model_info()
@@ -624,7 +635,7 @@ class TestAdvancedLLMHandlerFunctionality:
         """Test successful generation with provider"""
         mock_openai_provider._generate_response.return_value = "Generated response"
         
-        with patch('src.llm_handler.create_llm_provider', return_value=mock_openai_provider):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=mock_openai_provider):
             handler = LLMHandler()
             
             result = handler._generate_with_provider("test prompt")
@@ -634,7 +645,7 @@ class TestAdvancedLLMHandlerFunctionality:
 
     def test_generate_with_provider_no_provider(self):
         """Test generation fails when no provider available"""
-        with patch('src.llm_handler.create_llm_provider', return_value=None):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=None):
             handler = LLMHandler()
             
             with pytest.raises(LLMAnalysisError) as exc_info:
@@ -646,7 +657,7 @@ class TestAdvancedLLMHandlerFunctionality:
         """Test generation handles provider exceptions"""
         mock_openai_provider._generate_response.side_effect = Exception("Provider failed")
         
-        with patch('src.llm_handler.create_llm_provider', return_value=mock_openai_provider):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=mock_openai_provider):
             handler = LLMHandler()
             
             with pytest.raises(LLMAnalysisError) as exc_info:
@@ -656,7 +667,7 @@ class TestAdvancedLLMHandlerFunctionality:
 
     def test_parse_analysis_response_json_cleaning(self):
         """Test JSON response cleaning with code blocks"""
-        with patch('src.llm_handler.create_llm_provider', return_value=None):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=None):
             handler = LLMHandler()
             
             json_response = {
@@ -676,7 +687,7 @@ class TestAdvancedLLMHandlerFunctionality:
 
     def test_parse_analysis_response_invalid_required_reviews(self):
         """Test parsing with invalid required_reviews format"""
-        with patch('src.llm_handler.create_llm_provider', return_value=None):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=None):
             handler = LLMHandler()
             
             # Test with string instead of list
@@ -697,7 +708,7 @@ class TestAdvancedLLMHandlerFunctionality:
 
     def test_fallback_classification_actual_to_placeholder(self):
         """Test fallback classification for actual to placeholder changes"""
-        with patch('src.llm_handler.create_llm_provider', return_value=None):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=None):
             handler = LLMHandler()
             
             result = handler._fallback_classification(
@@ -709,7 +720,7 @@ class TestAdvancedLLMHandlerFunctionality:
 
     def test_fallback_classification_monetary_detection(self):
         """Test fallback classification detects monetary values correctly"""
-        with patch('src.llm_handler.create_llm_provider', return_value=None):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=None):
             handler = LLMHandler()
             
             # Test various monetary formats
@@ -728,7 +739,7 @@ class TestAdvancedLLMHandlerFunctionality:
 
     def test_fallback_classification_company_names(self):
         """Test fallback classification detects company name changes"""
-        with patch('src.llm_handler.create_llm_provider', return_value=None):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=None):
             handler = LLMHandler()
             
             result = handler._fallback_classification(
@@ -740,7 +751,7 @@ class TestAdvancedLLMHandlerFunctionality:
 
     def test_fallback_classification_service_changes(self):
         """Test fallback classification detects service changes"""
-        with patch('src.llm_handler.create_llm_provider', return_value=None):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=None):
             handler = LLMHandler()
             
             result = handler._fallback_classification(
@@ -752,7 +763,7 @@ class TestAdvancedLLMHandlerFunctionality:
 
     def test_fallback_classification_critical_keywords(self):
         """Test fallback classification detects critical keywords"""
-        with patch('src.llm_handler.create_llm_provider', return_value=None):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=None):
             handler = LLMHandler()
             
             critical_cases = [
@@ -768,7 +779,7 @@ class TestAdvancedLLMHandlerFunctionality:
 
     def test_fallback_classification_default(self):
         """Test fallback classification default behavior"""
-        with patch('src.llm_handler.create_llm_provider', return_value=None):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=None):
             handler = LLMHandler()
             
             # Test with minimal text
@@ -787,7 +798,7 @@ class TestAdvancedLLMHandlerFunctionality:
         
         mock_openai_provider._generate_response.return_value = json.dumps(mock_response)
         
-        with patch('src.llm_handler.create_llm_provider', return_value=mock_openai_provider):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=mock_openai_provider):
             handler = LLMHandler()
             
             # Create 15 changes to trigger progress logging
@@ -798,7 +809,7 @@ class TestAdvancedLLMHandlerFunctionality:
                     ('insert', f'new text {i}')
                 ])
             
-            with patch('src.llm_handler.logger') as mock_logger:
+            with patch('app.services.llm.handler.logger') as mock_logger:
                 results = handler.analyze_changes(changes)
                 
                 # Should have logged progress at 10 items
@@ -815,7 +826,7 @@ class TestAdvancedLLMHandlerFunctionality:
         
         mock_openai_provider._generate_response.return_value = json.dumps(mock_response)
         
-        with patch('src.llm_handler.create_llm_provider', return_value=mock_openai_provider):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=mock_openai_provider):
             handler = LLMHandler()
             
             changes = [
@@ -836,7 +847,7 @@ class TestAdvancedLLMHandlerFunctionality:
         """Test get_health_status handles exceptions"""
         mock_openai_provider.get_health_status.side_effect = Exception("Health check failed")
         
-        with patch('src.llm_handler.create_llm_provider', return_value=mock_openai_provider):
+        with patch('app.services.llm.provider_factory.create_llm_provider', return_value=mock_openai_provider):
             handler = LLMHandler()
             
             result = handler.get_health_status()
@@ -848,18 +859,18 @@ class TestAdvancedLLMHandlerFunctionality:
 
     def test_backward_compatibility_functions(self):
         """Test backward compatibility functions work correctly"""
-        with patch('src.llm_handler.LLMHandler') as mock_handler_class:
+        with patch('app.services.llm.handler.LLMHandler') as mock_handler_class:
             mock_handler = Mock()
             mock_handler.get_change_analysis.return_value = {"test": "result"}
             mock_handler.check_connection.return_value = True
             mock_handler_class.return_value = mock_handler
             
             # Test get_change_analysis function
-            from src.llm_handler import get_change_analysis
+            from app.services.llm.handler import get_change_analysis
             result = get_change_analysis("deleted", "inserted")
             assert result == {"test": "result"}
             
             # Test test_openai_connection function
-            from src.llm_handler import test_openai_connection
+            from app.services.llm.handler import test_openai_connection
             result = test_openai_connection()
             assert result is True

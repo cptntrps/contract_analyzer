@@ -28,6 +28,13 @@ class SecurityEventType(Enum):
     SERVER_STARTED = "server_started"
     SERVER_STOPPED = "server_stopped"
     ERROR_OCCURRED = "error_occurred"
+    REPORT_DOWNLOADED = "report_downloaded"
+    REDLINED_DOCUMENT_DOWNLOADED = "redlined_document_downloaded"
+    CHANGES_TABLE_DOWNLOADED = "changes_table_downloaded"
+    REPORT_GENERATION_STARTED = "report_generation_started"
+    REPORT_GENERATION_COMPLETED = "report_generation_completed"
+    REPORT_GENERATION_FAILED = "report_generation_failed"
+    REPORT_GENERATION_ERROR = "report_generation_error"
 
 
 class SecurityAuditor:

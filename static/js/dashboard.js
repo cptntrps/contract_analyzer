@@ -1248,112 +1248,7 @@ function refreshData() {
     showNotification('Data refreshed', 'success');
 }
 
-function analyzeAllContracts() {
-    const contractIds = dashboardData.contracts.map(c => c.id);
-    
-    if (contractIds.length === 0) {
-        showNotification('No contracts to analyze', 'warning');
-        return;
-    }
-    
-    showNotification('Starting batch analysis...', 'info');
-    
-    fetch('/api/batch-analyze', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ contract_ids: contractIds })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.error) {
-            showNotification(`Error: ${data.error}`, 'error');
-        } else {
-            showNotification(`Batch analysis completed: ${data.count} contracts analyzed`, 'success');
-            loadDashboardData();
-        }
-    })
-    .catch(error => {
-        console.error('Batch analyze error:', error);
-        showNotification('Error performing batch analysis', 'error');
-    });
-}
-
-function analyzeContract(contractId) {
-    showNotification('Analyzing contract...', 'info');
-    
-    fetch('/api/analyze-contract', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ contract_id: contractId })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.error) {
-            showNotification(`Error: ${data.error}`, 'error');
-        } else {
-            showNotification('Contract analysis completed', 'success');
-            loadDashboardData();
-        }
-    })
-    .catch(error => {
-        console.error('Analyze error:', error);
-        showNotification('Error analyzing contract', 'error');
-    });
-}
-
-function deleteContract(contractId) {
-    if (!confirm('Are you sure you want to delete this contract?')) {
-        return;
-    }
-    
-    fetch(`/api/delete-contract/${contractId}`, {
-        method: 'DELETE'
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.error) {
-            showNotification(`Error: ${data.error}`, 'error');
-        } else {
-            showNotification('Contract deleted successfully', 'success');
-            loadDashboardData();
-        }
-    })
-    .catch(error => {
-        console.error('Delete error:', error);
-        showNotification('Error deleting contract', 'error');
-    });
-}
-
-function deleteTemplate(templateId) {
-    if (!confirm('Are you sure you want to delete this template?')) {
-        return;
-    }
-    
-    fetch(`/api/delete-template/${templateId}`, {
-        method: 'DELETE'
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.error) {
-            showNotification(`Error: ${data.error}`, 'error');
-        } else {
-            showNotification('Template deleted successfully', 'success');
-            loadDashboardData();
-        }
-    })
-    .catch(error => {
-        console.error('Delete error:', error);
-        showNotification('Error deleting template', 'error');
-    });
-}
-
-function editTemplate(templateId) {
-    showNotification('Template editing feature coming soon', 'info');
-}
+// Removed duplicate functions - using primary implementations above
 
 // Settings functions
 function loadSettings() {
@@ -1978,58 +1873,7 @@ function updateModelDescription(model) {
     `;
 }
 
-function changeOpenAIModel(modelName) {
-    if (modelSwitchInProgress) {
-        showNotification('Model change already in progress', 'warning');
-        return;
-    }
-    
-    modelSwitchInProgress = true;
-    const modelSelect = document.getElementById('openaiModel');
-    
-    console.log('Changing OpenAI model to:', modelName);
-    
-    // Add loading animation
-    modelSelect.classList.add('model-switching');
-    modelSelect.disabled = true;
-    
-    showNotification('Changing model...', 'info');
-    
-    fetch('/api/update-openai-model', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            model: modelName
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            currentModel = modelName;
-            showNotification(`Model changed to ${modelName}`, 'success');
-            
-            // Update model info display
-            loadModelInfo();
-            loadLLMProviderInfo();
-            
-            console.log('Model change successful');
-        } else {
-            showNotification(`Model change failed: ${data.error}`, 'error');
-            console.error('Model change failed:', data.error);
-        }
-    })
-    .catch(error => {
-        console.error('Error changing model:', error);
-        showNotification('Error changing model', 'error');
-    })
-    .finally(() => {
-        modelSwitchInProgress = false;
-        modelSelect.classList.remove('model-switching');
-        modelSelect.disabled = false;
-    });
-}
+// Removed duplicate function - using primary implementation above
 
 function loadLLMProviderInfo() {
     console.log('Loading LLM provider information...');
@@ -2149,77 +1993,6 @@ function switchProvider(providerType) {
     }
 }
 
-// REMOVED: function loadOllamaModels() {
-// REMOVED:     console.log('Loading Ollama models...');
-// REMOVED:     
-// REMOVED:     fetch('/api/available-models')
-// REMOVED:         .then(response => response.json())
-// REMOVED:         .then(data => {
-// REMOVED:             const ollamaSelect = document.getElementById('ollamaModel');
-// REMOVED:             if (!ollamaSelect) return;
-// REMOVED:             
-// REMOVED:             if (data.success && data.models) {
-// REMOVED:                 ollamaSelect.innerHTML = '';
-// REMOVED:                 
-// REMOVED:                 data.models.forEach(model => {
-// REMOVED:                     const option = document.createElement('option');
-// REMOVED:                     option.value = model.name;
-// REMOVED:                     const sizeGB = (model.size / (1024 * 1024 * 1024)).toFixed(1);
-// REMOVED:                     option.textContent = `${model.name} (${sizeGB} GB)`;
-// REMOVED:                     
-// REMOVED:                     if (model.current) {
-// REMOVED:                         option.selected = true;
-// REMOVED:                     }
-// REMOVED:                     
-// REMOVED:                     ollamaSelect.appendChild(option);
-// REMOVED:                 });
-// REMOVED:                 
-// REMOVED:                 ollamaSelect.addEventListener('change', function() {
-// REMOVED:                     if (this.value) {
-// REMOVED:                         changeOllamaModel(this.value);
-// REMOVED:                     }
-// REMOVED:                 });
-// REMOVED:             } else {
-// REMOVED:                 ollamaSelect.innerHTML = '<option value="">Error loading models</option>';
-// REMOVED:             }
-// REMOVED:         })
-// REMOVED:         .catch(error => {
-// REMOVED:             console.error('Error loading Ollama models:', error);
-// REMOVED:             const ollamaSelect = document.getElementById('ollamaModel');
-// REMOVED:             if (ollamaSelect) {
-// REMOVED:                 ollamaSelect.innerHTML = '<option value="">Error loading models</option>';
-// REMOVED:             }
-// REMOVED:         });
-// REMOVED: }
-// REMOVED: 
-// REMOVED: function changeOllamaModel(modelName) {
-// REMOVED:     console.log('Changing Ollama model to:', modelName);
-// REMOVED:     
-// REMOVED:     showNotification('Changing Ollama model...', 'info');
-// REMOVED:     
-// REMOVED:     fetch('/api/change-model', {
-// REMOVED:         method: 'POST',
-// REMOVED:         headers: {
-// REMOVED:             'Content-Type': 'application/json',
-// REMOVED:         },
-// REMOVED:         body: JSON.stringify({
-// REMOVED:             model: modelName
-// REMOVED:         })
-// REMOVED:     })
-// REMOVED:     .then(response => response.json())
-// REMOVED:     .then(data => {
-// REMOVED:         if (data.success) {
-// REMOVED:             showNotification(`Model changed to ${modelName}`, 'success');
-// REMOVED:             loadModelInfo();
-// REMOVED:         } else {
-// REMOVED:             showNotification(`Model change failed: ${data.message}`, 'error');
-// REMOVED:         }
-// REMOVED:     })
-// REMOVED:     .catch(error => {
-// REMOVED:         console.error('Error changing Ollama model:', error);
-// REMOVED:         showNotification('Error changing model', 'error');
-// REMOVED:     });
-// REMOVED: }
 
 function updateLLMProvider(providerType) {
     console.log('Updating LLM provider to:', providerType);
@@ -2255,7 +2028,7 @@ function updateLLMProvider(providerType) {
 function updateLLMSettings(settings) {
     console.log('Updating LLM settings:', settings);
     
-    fetch('/api/update-llm-settings', {
+    fetch('/api/llm-settings', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',

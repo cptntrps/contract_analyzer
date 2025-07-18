@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch, MagicMock
 from io import BytesIO
 from werkzeug.datastructures import FileStorage
 
-from src.dashboard_server import DashboardServer
+from app.dashboard_server import DashboardServer
 
 
 class TestHealthEndpoints:

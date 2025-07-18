@@ -8,7 +8,7 @@ from pathlib import Path
 from flask import Blueprint, request, jsonify, send_file, current_app
 
 from ...services.reports.generator import create_report_generator, ReportGenerationError
-from ...utils.security.audit import SecurityAuditor
+from ...utils.security.audit import SecurityAuditor, SecurityEventType
 from ...utils.logging.setup import get_logger
 
 # Import analysis results store from analysis routes
@@ -102,13 +102,14 @@ def generate_report():
         
         # Log report generation start
         security_auditor.log_security_event(
-            event_type='report_generation_started',
+            event_type=SecurityEventType.REPORT_GENERATION_STARTED,
             details={
                 'analysis_id': analysis_id,
                 'formats': formats,
                 'base_name': base_name
             },
-            request=request
+            user_ip=request.remote_addr,
+            user_agent=request.headers.get('User-Agent')
         )
         
         logger.info(f"Starting report generation for analysis {analysis_id} - Formats: {formats}")
@@ -136,13 +137,14 @@ def generate_report():
         
         # Log successful generation
         security_auditor.log_security_event(
-            event_type='report_generation_completed',
+            event_type=SecurityEventType.REPORT_GENERATION_COMPLETED,
             details={
                 'analysis_id': analysis_id,
                 'generated_files': list(generated_files.keys()),
                 'file_count': len(report_files)
             },
-            request=request
+            user_ip=request.remote_addr,
+            user_agent=request.headers.get('User-Agent')
         )
         
         logger.info(f"Report generation completed for analysis {analysis_id} - Generated {len(report_files)} files")
@@ -157,9 +159,10 @@ def generate_report():
     except ReportGenerationError as e:
         logger.error(f"Report generation error: {e}")
         security_auditor.log_security_event(
-            event_type='report_generation_failed',
+            event_type=SecurityEventType.REPORT_GENERATION_FAILED,
             details={'error': str(e)},
-            request=request
+            user_ip=request.remote_addr,
+            user_agent=request.headers.get('User-Agent')
         )
         return jsonify({
             'success': False,
@@ -169,9 +172,10 @@ def generate_report():
     except Exception as e:
         logger.error(f"Error generating reports: {e}")
         security_auditor.log_security_event(
-            event_type='report_generation_error',
+            event_type=SecurityEventType.REPORT_GENERATION_ERROR,
             details={'error': str(e)},
-            request=request
+            user_ip=request.remote_addr,
+            user_agent=request.headers.get('User-Agent')
         )
         return jsonify({
             'success': False,
@@ -212,9 +216,10 @@ def download_report(filename):
         
         # Log download
         security_auditor.log_security_event(
-            event_type='report_downloaded',
+            event_type=SecurityEventType.REPORT_DOWNLOADED,
             details={'filename': filename, 'file_size': file_path.stat().st_size},
-            request=request
+            user_ip=request.remote_addr,
+            user_agent=request.headers.get('User-Agent')
         )
         
         # Send file
@@ -229,4 +234,116 @@ def download_report(filename):
         return jsonify({
             'success': False,
             'error': 'Failed to download report'
+        }), 500
+
+
+@reports_bp.route('/download-redlined-document')
+def download_redlined_document():
+    """Download redlined document for an analysis"""
+    try:
+        analysis_id = request.args.get('id')
+        if not analysis_id:
+            return jsonify({
+                'success': False,
+                'error': 'Analysis ID is required'
+            }), 400
+        
+        # Find the redlined document file
+        reports_dir = Path(current_app.config.get('REPORTS_FOLDER', 'data/reports'))
+        
+        # Look for redlined document files with the analysis ID pattern
+        redlined_files = list(reports_dir.glob(f"*{analysis_id}*redlined*.docx"))
+        
+        if not redlined_files:
+            # Try alternate pattern - look for files matching the analysis result
+            if analysis_id in analysis_results_store:
+                result = analysis_results_store[analysis_id]
+                # Try to find files based on contract name
+                contract_name = result.get('contract', '').replace('.docx', '')
+                redlined_files = list(reports_dir.glob(f"{contract_name}*redlined*.docx"))
+        
+        if not redlined_files:
+            return jsonify({
+                'success': False,
+                'error': 'Redlined document not found'
+            }), 404
+        
+        # Use the most recent file
+        redlined_file = max(redlined_files, key=lambda f: f.stat().st_mtime)
+        
+        # Log download
+        security_auditor.log_security_event(
+            event_type=SecurityEventType.REDLINED_DOCUMENT_DOWNLOADED,
+            details={'analysis_id': analysis_id, 'filename': redlined_file.name},
+            user_ip=request.remote_addr,
+            user_agent=request.headers.get('User-Agent')
+        )
+        
+        return send_file(
+            str(redlined_file),
+            as_attachment=True,
+            download_name=redlined_file.name
+        )
+        
+    except Exception as e:
+        logger.error(f"Error downloading redlined document for analysis {analysis_id}: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to download redlined document'
+        }), 500
+
+
+@reports_bp.route('/download-changes-table')
+def download_changes_table():
+    """Download changes table for an analysis"""
+    try:
+        analysis_id = request.args.get('id')
+        if not analysis_id:
+            return jsonify({
+                'success': False,
+                'error': 'Analysis ID is required'
+            }), 400
+        
+        # Find the changes table file
+        reports_dir = Path(current_app.config.get('REPORTS_FOLDER', 'data/reports'))
+        
+        # Look for changes table files with the analysis ID pattern
+        changes_files = list(reports_dir.glob(f"*{analysis_id}*changes_table*.xlsx"))
+        
+        if not changes_files:
+            # Try alternate pattern - look for files matching the analysis result
+            if analysis_id in analysis_results_store:
+                result = analysis_results_store[analysis_id]
+                # Try to find files based on contract name
+                contract_name = result.get('contract', '').replace('.docx', '')
+                changes_files = list(reports_dir.glob(f"{contract_name}*changes_table*.xlsx"))
+        
+        if not changes_files:
+            return jsonify({
+                'success': False,
+                'error': 'Changes table not found'
+            }), 404
+        
+        # Use the most recent file
+        changes_file = max(changes_files, key=lambda f: f.stat().st_mtime)
+        
+        # Log download
+        security_auditor.log_security_event(
+            event_type=SecurityEventType.CHANGES_TABLE_DOWNLOADED,
+            details={'analysis_id': analysis_id, 'filename': changes_file.name},
+            user_ip=request.remote_addr,
+            user_agent=request.headers.get('User-Agent')
+        )
+        
+        return send_file(
+            str(changes_file),
+            as_attachment=True,
+            download_name=changes_file.name
+        )
+        
+    except Exception as e:
+        logger.error(f"Error downloading changes table for analysis {analysis_id}: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to download changes table'
         }), 500
