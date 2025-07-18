@@ -10,10 +10,10 @@ from unittest.mock import Mock, patch, MagicMock
 from pathlib import Path
 from io import BytesIO
 
-from app.dashboard_server import DashboardServer
-from app.services.analyzer import ContractAnalyzer
-from app.services.llm.handler import LLMHandler
-from app.reports.enhanced_report_generator import EnhancedReportGenerator
+from app.main import create_app
+from app.core.services.analyzer import ContractAnalyzer
+from app.services.llm.providers.openai import OpenAIProvider
+from app.services.reports.generator import ReportGenerator
 
 
 class TestCompleteContractWorkflow:

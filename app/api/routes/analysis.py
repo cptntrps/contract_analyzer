@@ -206,6 +206,13 @@ def analyze_contract():
                 'error': 'Contract ID is required'
             }), 400
         
+        # Validate contract ID format to prevent injection attacks
+        if not contract_id.isalnum() or len(contract_id) > 50:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid contract ID format'
+            }), 400
+        
         # Check if contract exists
         if contract_id not in contracts_store:
             return jsonify({
@@ -332,6 +339,13 @@ def start_analysis():
                 'error': 'Contract ID is required'
             }), 400
         
+        # Validate contract ID format to prevent injection attacks
+        if not contract_id.isalnum() or len(contract_id) > 50:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid contract ID format'
+            }), 400
+        
         if not template_filename:
             return jsonify({
                 'success': False,
@@ -356,7 +370,24 @@ def start_analysis():
         
         # Find template file
         templates_dir = Path(current_app.config.get('TEMPLATES_FOLDER', 'data/templates'))
+        
+        # Validate template filename to prevent path traversal
+        if not template_filename or '/' in template_filename or '\\' in template_filename or '..' in template_filename:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid template filename'
+            }), 400
+        
         template_path = templates_dir / template_filename
+        
+        # Security check - ensure template is within templates directory
+        try:
+            template_path.resolve().relative_to(templates_dir.resolve())
+        except ValueError:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid template path'
+            }), 400
         
         if not template_path.exists():
             return jsonify({

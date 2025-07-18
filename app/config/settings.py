@@ -18,10 +18,10 @@ class BaseConfig:
     
     # === APPLICATION METADATA ===
     APP_NAME = "Contract Analyzer"
-    APP_VERSION = "1.1.0"
+    APP_VERSION = "1.2.0"
     
     # === FLASK CONFIGURATION ===
-    SECRET_KEY = os.getenv('FLASK_SECRET_KEY', 'dev-key-change-in-production')
+    SECRET_KEY = os.getenv('FLASK_SECRET_KEY')
     ENV = os.getenv('FLASK_ENV', 'development')
     DEBUG = os.getenv('DEBUG', 'true').lower() == 'true'
     HOST = os.getenv('FLASK_HOST', '0.0.0.0')
@@ -102,6 +102,13 @@ class BaseConfig:
         # Validate required settings
         if not cls.OPENAI_API_KEY:
             errors.append("OPENAI_API_KEY is required")
+        
+        if not cls.SECRET_KEY:
+            errors.append("FLASK_SECRET_KEY is required and must be set in environment")
+        elif cls.SECRET_KEY == 'dev-key-change-in-production':
+            errors.append("FLASK_SECRET_KEY cannot use default development key in production")
+        elif len(cls.SECRET_KEY) < 32:
+            errors.append("FLASK_SECRET_KEY must be at least 32 characters long")
         
         if cls.LLM_BATCH_SIZE < 1:
             errors.append("LLM_BATCH_SIZE must be at least 1")

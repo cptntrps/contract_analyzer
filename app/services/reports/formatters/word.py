@@ -197,8 +197,9 @@ class WordReportFormatter:
             # Always cleanup COM
             try:
                 pythoncom.CoUninitialize()
-            except:
-                pass
+            except Exception as e:
+                logger.warning(f"Failed to cleanup COM: {e}")
+                # Continue cleanup even if COM uninitialize fails
     
     def _safe_com_cleanup(self, word=None, original=None, revised=None, compared_doc=None):
         """Safely clean up COM objects without propagating errors"""

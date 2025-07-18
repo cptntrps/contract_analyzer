@@ -190,9 +190,22 @@ class ContractAnalyzer:
             
             return analysis_result
             
+        except ContractAnalysisError:
+            # Re-raise specific analysis errors
+            raise
+        except FileNotFoundError as e:
+            contract.mark_error(f"File not found: {str(e)}")
+            raise ContractAnalysisError(f"Contract file not found: {e}")
+        except PermissionError as e:
+            contract.mark_error(f"Permission denied: {str(e)}")
+            raise ContractAnalysisError(f"Permission denied accessing contract: {e}")
+        except ValueError as e:
+            contract.mark_error(f"Invalid data: {str(e)}")
+            raise ContractAnalysisError(f"Invalid contract data: {e}")
         except Exception as e:
-            contract.mark_error(f"Analysis failed: {str(e)}")
-            raise ContractAnalysisError(f"Contract analysis failed: {e}")
+            contract.mark_error(f"Unexpected error: {str(e)}")
+            logger.error(f"Unexpected error in contract analysis: {e}", exc_info=True)
+            raise ContractAnalysisError(f"Contract analysis failed due to unexpected error: {e}")
     
     def _perform_llm_analysis(
         self,

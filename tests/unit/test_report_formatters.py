@@ -9,22 +9,22 @@ import json
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 
-from app.services.reports.formatters.excel import ExcelFormatter
-from app.services.reports.formatters.word import WordFormatter
-from app.services.reports.formatters.pdf import PDFFormatter
+from app.services.reports.formatters.excel import ExcelReportFormatter
+from app.services.reports.formatters.word import WordReportFormatter
+from app.services.reports.formatters.pdf import PDFReportFormatter
 
 
 class TestExcelFormatter:
-    """Test suite for ExcelFormatter"""
+    """Test suite for ExcelReportFormatter"""
 
     def test_init(self):
         """Test formatter initialization"""
-        formatter = ExcelFormatter()
+        formatter = ExcelReportFormatter()
         assert formatter is not None
 
     def test_generate_changes_table_success(self):
         """Test successful Excel changes table generation"""
-        formatter = ExcelFormatter()
+        formatter = ExcelReportFormatter()
         
         analysis_data = {
             'contract_name': 'Test Contract.docx',
@@ -170,12 +170,12 @@ class TestWordFormatter:
 
     def test_init(self):
         """Test formatter initialization"""
-        formatter = WordFormatter()
+        formatter = WordReportFormatter()
         assert formatter is not None
 
     def test_generate_summary_report_success(self):
         """Test successful Word summary report generation"""
-        formatter = WordFormatter()
+        formatter = WordReportFormatter()
         
         analysis_data = {
             'contract_name': 'Test Contract.docx',
@@ -335,12 +335,12 @@ class TestPDFFormatter:
 
     def test_init(self):
         """Test formatter initialization"""
-        formatter = PDFFormatter()
+        formatter = PDFReportFormatter()
         assert formatter is not None
 
     def test_generate_summary_report_success(self):
         """Test successful PDF summary report generation"""
-        formatter = PDFFormatter()
+        formatter = PDFReportFormatter()
         
         analysis_data = {
             'contract_name': 'Test Contract.docx',

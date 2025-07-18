@@ -1,5 +1,58 @@
 # Changelog
 
+## [1.2.0] - 2025-07-18
+
+### 🔒 **CRITICAL SECURITY & QUALITY IMPROVEMENTS**
+Comprehensive codebase review and hardening with critical security fixes and performance enhancements.
+
+#### **Security Vulnerabilities Fixed**
+- **🔐 Secret Key Security**: Removed hardcoded Flask secret key and implemented secure key validation
+- **🛡️ Input Validation**: Added comprehensive input validation to prevent injection attacks
+- **🚫 Path Traversal Protection**: Implemented path traversal checks for file operations
+- **🔍 Exception Handling**: Fixed bare exception handling that silently ignored errors
+- **📊 Performance Monitoring**: Added real-time response time tracking and performance categorization
+
+#### **Security Enhancements**
+- **Contract ID Validation**: Alphanumeric-only IDs with length limits
+- **Template Filename Validation**: Path traversal prevention and filename sanitization
+- **API Response Standardization**: Consistent error response format across all endpoints
+- **Security Event Logging**: Enhanced audit logging with performance metrics
+
+#### **Code Quality Improvements**
+- **Proper Error Handling**: Specific exception types instead of generic catches
+- **Standardized API Responses**: Created APIResponse utility for consistent formatting
+- **Test Import Fixes**: Fixed broken test imports and class name mismatches
+- **Performance Monitoring**: Real-time request timing and categorization
+
+#### **Test Infrastructure**
+- **Fixed Test Imports**: Corrected imports for ExcelReportFormatter, WordReportFormatter, PDFReportFormatter
+- **Test Execution**: Verified test suite functionality with proper class references
+- **E2E Test Updates**: Updated end-to-end test imports for new architecture
+
+#### **Configuration Management**
+- **Environment Variables**: Proper validation for required configuration
+- **Secret Key Generation**: Secure 32-character key generation and validation
+- **Configuration Validation**: Enhanced validation with specific error messages
+
+#### **Performance Improvements**
+- **Request Timing**: Millisecond-precision response time measurement
+- **Performance Categorization**: Fast (<100ms), Normal (<500ms), Slow (<2s), Very Slow (>2s)
+- **Memory Optimization**: Improved exception handling reduces memory leaks
+
+#### **API Security**
+- **Path Validation**: Prevents directory traversal attacks
+- **Input Sanitization**: Comprehensive validation of all user inputs
+- **Error Response**: Standardized error responses without information disclosure
+- **Security Auditing**: Enhanced logging with performance and security metrics
+
+#### **Production Readiness**
+- **Secret Key Management**: Enforced environment-based secret key configuration
+- **Error Handling**: Graceful error handling with proper logging
+- **Performance Monitoring**: Real-time performance tracking and alerting
+- **Security Logging**: Comprehensive audit trail with performance metrics
+
+This release addresses critical security vulnerabilities and significantly improves the production readiness of the Contract Analyzer application.
+
 ## [1.1.0] - 2025-07-18
 
 ### 🚀 **MAJOR ARCHITECTURAL OVERHAUL - NATIVE API MIGRATION**

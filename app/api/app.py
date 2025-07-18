@@ -82,6 +82,12 @@ def register_middleware(app: Flask, config):
         
         logger.debug(f"Request: {request.method} {request.path} from {request.remote_addr}")
     
+    @app.before_request
+    def start_timer():
+        """Start timing the request"""
+        import time
+        request._start_time = time.time()
+    
     @app.after_request
     def log_response_info(response):
         """Log response information"""
@@ -89,13 +95,20 @@ def register_middleware(app: Flask, config):
         if request.endpoint in ['static', 'health_check']:
             return response
         
+        # Calculate response time
+        import time
+        response_time = 0.0
+        if hasattr(request, '_start_time'):
+            response_time = time.time() - request._start_time
+            response._response_time = response_time
+        
         # Log API access for security audit
         if request.path.startswith('/api/'):
             default_auditor.log_api_access(
                 endpoint=request.path,
                 method=request.method,
                 status_code=response.status_code,
-                response_time=0.0,  # TODO: Calculate actual response time
+                response_time=response_time,
                 user_ip=request.remote_addr,
                 user_agent=request.headers.get('User-Agent')
             )
