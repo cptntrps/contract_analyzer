@@ -1,0 +1,27 @@
+# Python runtime and local environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+venv/
+.venv/
+env/
+.env
+.env.*
+
+# Runtime uploads and generated analyzer outputs
+uploads/
+reports/
+reports_*/
+validation_reports/
+*_backup/
+
+# Local editor and OS noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

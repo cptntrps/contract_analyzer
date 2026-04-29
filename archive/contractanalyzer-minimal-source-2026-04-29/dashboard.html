@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contract Analyzer Dashboard</title>
+    <link rel="stylesheet" href="static/css/dashboard.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Header -->
+        <header class="dashboard-header">
+            <div class="header-content">
+                <div class="logo-section">
+                    <i class="fas fa-file-contract"></i>
+                    <h1>Contract Analyzer</h1>
+                </div>
+                <div class="header-stats">
+                    <div class="stat-item">
+                        <span class="stat-number" id="total-analyzed">0</span>
+                        <span class="stat-label">Contracts Analyzed</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number" id="compliance-rate">0%</span>
+                        <span class="stat-label">Compliance Rate</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="dashboard-main">
+            <!-- Sidebar -->
+            <aside class="dashboard-sidebar">
+                <nav class="sidebar-nav">
+                    <ul>
+                        <li class="nav-item active">
+                            <a href="#overview" class="nav-link">
+                                <i class="fas fa-chart-line"></i>
+                                <span>Overview</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="#contracts" class="nav-link">
+                                <i class="fas fa-file-alt"></i>
+                                <span>Contracts</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="#templates" class="nav-link">
+                                <i class="fas fa-copy"></i>
+                                <span>Templates</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="#reports" class="nav-link">
+                                <i class="fas fa-chart-bar"></i>
+                                <span>Reports</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="#settings" class="nav-link">
+                                <i class="fas fa-cog"></i>
+                                <span>Settings</span>
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            </aside>
+
+            <!-- Content Area -->
+            <section class="dashboard-content">
+                <!-- Overview Tab -->
+                <div id="overview-tab" class="content-tab active">
+                    <div class="tab-header">
+                        <h2>Dashboard Overview</h2>
+                        <div class="tab-actions">
+                            <button class="btn btn-primary" id="analyze-new-btn">
+                                <i class="fas fa-plus"></i>
+                                Analyze New Contract
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Key Metrics -->
+                    <div class="metrics-grid">
+                        <div class="metric-card compliant">
+                            <div class="metric-icon">
+                                <i class="fas fa-check-circle"></i>
+                            </div>
+                            <div class="metric-content">
+                                <h3 id="compliant-count">0</h3>
+                                <p>Compliant Contracts</p>
+                            </div>
+                        </div>
+                        <div class="metric-card warning">
+                            <div class="metric-icon">
+                                <i class="fas fa-exclamation-triangle"></i>
+                            </div>
+                            <div class="metric-content">
+                                <h3 id="warning-count">0</h3>
+                                <p>Minor Changes</p>
+                            </div>
+                        </div>
+                        <div class="metric-card critical">
+                            <div class="metric-icon">
+                                <i class="fas fa-times-circle"></i>
+                            </div>
+                            <div class="metric-content">
+                                <h3 id="critical-count">0</h3>
+                                <p>Major Changes</p>
+                            </div>
+                        </div>
+                        <div class="metric-card info">
+                            <div class="metric-icon">
+                                <i class="fas fa-file-signature"></i>
+                            </div>
+                            <div class="metric-content">
+                                <h3 id="template-count">0</h3>
+                                <p>Active Templates</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Analysis -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Recent Analysis</h3>
+                            <div class="card-actions">
+                                <button class="btn btn-secondary" id="refresh-data">
+                                    <i class="fas fa-sync-alt"></i>
+                                    Refresh
+                                </button>
+                                <button class="btn btn-warning" id="clear-cache">
+                                    <i class="fas fa-trash-alt"></i>
+                                    Clear Cache
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-content">
+                            <div class="table-container">
+                                <table class="data-table" id="recent-analysis-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Contract</th>
+                                            <th>Template</th>
+                                            <th>Status</th>
+                                            <th>Changes</th>
+                                            <th>Similarity</th>
+                                            <th>Date</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <!-- Data will be populated by JavaScript -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Contracts Tab -->
+                <div id="contracts-tab" class="content-tab">
+                    <div class="tab-header">
+                        <h2>Contract Management</h2>
+                        <div class="tab-actions">
+                            <input type="file" id="upload-contract" accept=".docx" multiple style="display: none;">
+                            <button class="btn btn-primary" onclick="document.getElementById('upload-contract').click()">
+                                <i class="fas fa-upload"></i>
+                                Upload Contract
+                            </button>
+                            <button class="btn btn-success" id="run-analysis-btn">
+                                <i class="fas fa-play"></i>
+                                Run Analysis
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="contracts-grid" id="contracts-grid">
+                        <!-- Contract cards will be populated here -->
+                    </div>
+                </div>
+
+                <!-- Templates Tab -->
+                <div id="templates-tab" class="content-tab">
+                    <div class="tab-header">
+                        <h2>Template Management</h2>
+                        <div class="tab-actions">
+                            <input type="file" id="upload-template" accept=".docx" multiple style="display: none;">
+                            <button class="btn btn-primary" onclick="document.getElementById('upload-template').click()">
+                                <i class="fas fa-upload"></i>
+                                Upload Template
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="templates-grid" id="templates-grid">
+                        <!-- Template cards will be populated here -->
+                    </div>
+                </div>
+
+                <!-- Reports Tab -->
+                <div id="reports-tab" class="content-tab">
+                    <div class="tab-header">
+                        <h2>Analysis Reports</h2>
+                        <div class="tab-actions">
+                            <select class="form-select" id="report-filter">
+                                <option value="all">All Reports</option>
+                                <option value="compliant">Compliant Only</option>
+                                <option value="warnings">Warnings Only</option>
+                                <option value="critical">Critical Only</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="reports-grid" id="reports-grid">
+                        <!-- Report cards will be populated here -->
+                    </div>
+                </div>
+
+                <!-- Settings Tab -->
+                <div id="settings-tab" class="content-tab">
+                    <div class="tab-header">
+                        <h2>Settings</h2>
+                    </div>
+
+                    <div class="settings-grid">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Analysis Settings</h3>
+                            </div>
+                            <div class="card-content">
+                                <div class="form-group">
+                                    <label for="similarity-threshold">Similarity Threshold</label>
+                                    <input type="range" id="similarity-threshold" min="0" max="100" value="70">
+                                    <span class="threshold-value">70%</span>
+                                </div>
+                                <div class="form-group">
+                                    <label for="change-threshold">Minor Change Threshold</label>
+                                    <input type="number" id="change-threshold" value="10" min="1" max="100">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Notification Settings</h3>
+                            </div>
+                            <div class="card-content">
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="email-notifications" checked>
+                                        <span class="checkmark"></span>
+                                        Email Notifications
+                                    </label>
+                                </div>
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="critical-alerts" checked>
+                                        <span class="checkmark"></span>
+                                        Critical Change Alerts
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- File Upload Modal -->
+    <div id="upload-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Upload Progress</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="upload-progress">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="upload-progress"></div>
+                    </div>
+                    <div class="progress-text" id="upload-status">Uploading...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="static/js/dashboard.js"></script>
+</body>
+</html>
